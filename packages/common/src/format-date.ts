@@ -39,10 +39,10 @@ export function formatDate(dateParam: string | number | Date, pattern?: string, 
 	const prefix = utc ? "getUTC" : "get";
 	const d = () => date[`${prefix}Date`]();
 	const D = () => date[`${prefix}Day`]();
-	const m = () => date[`${prefix}Month`]();
+	const M = () => date[`${prefix}Month`]();
 	const y = () => date[`${prefix}FullYear`]();
 	const H = () => date[`${prefix}Hours`]();
-	const M = () => date[`${prefix}Minutes`]();
+	const m = () => date[`${prefix}Minutes`]();
 	const s = () => date[`${prefix}Seconds`]();
 	const L = () => date[`${prefix}Milliseconds`]();
 	const o = () => (utc ? 0 : (date as Date).getTimezoneOffset());
@@ -69,18 +69,18 @@ export function formatDate(dateParam: string | number | Date, pattern?: string, 
 			_: prefix,
 			dayName: i18n.dayNames[D() + 7]
 		}),
-		m: () => m() + 1,
-		mm: () => pad(m() + 1),
-		mmm: () => i18n.monthNames[m()],
-		mmmm: () => i18n.monthNames[m() + 12],
+		M: () => M() + 1,
+		MM: () => pad(M() + 1),
+		MMM: () => i18n.monthNames[M()],
+		MMMM: () => i18n.monthNames[M() + 12],
 		yy: () => String(y()).slice(2),
 		yyyy: () => pad(y(), 4),
 		h: () => H() % 12 || 12,
 		hh: () => pad(H() % 12 || 12),
 		H: () => H(),
 		HH: () => pad(H()),
-		M: () => M(),
-		MM: () => pad(M()),
+		m: () => m(),
+		mm: () => pad(m()),
 		s: () => s(),
 		ss: () => pad(s()),
 		l: () => pad(L(), 3),
@@ -112,20 +112,20 @@ export function formatDate(dateParam: string | number | Date, pattern?: string, 
 }
 
 export const patterns = Object.freeze({
-	default: "ddd mmm dd yyyy HH:MM:ss",
-	shortDate: "m/d/yy",
-	paddedShortDate: "mm/dd/yyyy",
-	mediumDate: "mmm d, yyyy",
-	longDate: "mmmm d, yyyy",
-	fullDate: "dddd, mmmm d, yyyy",
-	shortTime: "h:MM TT",
-	mediumTime: "h:MM:ss TT",
-	longTime: "h:MM:ss TT Z",
-	isoDate: "yyyy-mm-dd",
-	isoTime: "HH:MM:ss",
-	isoDateTime: "yyyy-mm-dd'T'HH:MM:sso",
-	isoUtcDateTime: "UTC:yyyy-mm-dd'T'HH:MM:ss'Z'",
-	expiresHeaderFormat: "ddd, dd mmm yyyy HH:MM:ss Z",
+	default: "ddd MMM dd yyyy HH:mm:ss",
+	shortDate: "M/d/yy",
+	paddedShortDate: "MM/dd/yyyy",
+	mediumDate: "MMM d, yyyy",
+	longDate: "MMMM d, yyyy",
+	fullDate: "dddd, MMMM d, yyyy",
+	shortTime: "h:mm TT",
+	mediumTime: "h:mm:ss TT",
+	longTime: "h:mm:ss TT Z",
+	isoDate: "yyyy-MM-dd",
+	isoTime: "HH:mm:ss",
+	isoDateTime: "yyyy-MM-dd'T'HH:mm:sso",
+	isoUtcDateTime: "UTC:yyyy-MM-dd'T'HH:mm:ss'Z'",
+	expiresHeaderFormat: "ddd, dd MMM yyyy HH:mm:ss Z",
 });
 
 // Internationalization strings
@@ -175,7 +175,7 @@ export const i18n = Object.freeze({
 	timeNames: ["a", "p", "am", "pm", "A", "P", "AM", "PM"],
 });
 
-const pad = (val: any, len = 2) => String(val).padStart(len, '0');
+const pad = (val: any, len = 2) => (typeof val == "string" ? val : String(val)).padStart(len, '0');
 
 /**
  * Get day name
