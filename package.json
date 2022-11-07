@@ -1,0 +1,16 @@
+{
+	"name": "utilities",
+	"version": "1.0.0",
+	"description": "Utilities for both browser and node.",
+	"main": "index.js",
+	"exports": {
+		".": "./packages/common/lib/index.js",
+		"./browser": "./packages/browser/lib/index.js",
+		"./node": "./packages/node/lib/index.js"
+	},
+	"scripts": {
+		"build": "pwsh ./scripts/build.ps1"
+	},
+	"author": "true_mogician",
+	"license": "MIT"
+}

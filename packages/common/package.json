@@ -1,0 +1,11 @@
+{
+	"name": "common-utilities",
+	"version": "1.0.0",
+	"description": "Utilities without platform specific dependencies",
+	"main": "lib/index.js",
+	"scripts": {
+		"build": "tsc"
+	},
+	"author": "true_mogician",
+	"license": "MIT"
+}

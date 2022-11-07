@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "Node16",
+		"lib": ["ESNext", "DOM"],
+		"esModuleInterop": true,
+		"experimentalDecorators": true,
+		"resolveJsonModule": true,
+		"noEmit": false,
+		"strict": true,
+		"noImplicitOverride": true,
+		"sourceMap": true,
+		"declaration": true,
+		"baseUrl": "./",
+		"outDir": "./lib",
+		"incremental": true
+	}
+}

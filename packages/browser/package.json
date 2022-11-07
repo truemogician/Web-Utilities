@@ -1,0 +1,11 @@
+{
+	"name": "browser-utilities",
+	"version": "1.0.0",
+	"description": "Utilities for browser-based applications",
+	"main": "lib/index.js",
+	"scripts": {
+		"build": "tsc"
+	},
+	"author": "true_mogician",
+	"license": "MIT"
+}
