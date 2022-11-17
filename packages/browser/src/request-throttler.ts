@@ -129,7 +129,17 @@ export class RequestThrottler {
 	}
 
 	fetch(input: Parameters<Fetch>[0], init?: Parameters<Fetch>[1]): Promise<Response> {
-		const url = input instanceof URL ? input : new URL(typeof input == "string" ? input : input.url);
+		let url = input instanceof URL ? input : typeof input == "string" ? input : input.url;
+		if (typeof url == "string") {
+			if (url.startsWith("/"))
+				url = location.origin + url;
+			try {
+				url = new URL(url);
+			}
+			catch {
+				throw new TypeError(`Invalid URL: ${url}`);
+			}
+		}
 		const scope = this.config.scope;
 		const key = scope == "global" ? "global"
 			: scope == "domain" ? url.host
