@@ -1,13 +1,20 @@
+import type { WritableKeysOf } from "type-fest";
+
 interface NewAttributes {
 	children?: HTMLElement | HTMLElement[];
 	classList?: string[];
 	style?: Partial<CSSStyleDeclaration>;
 }
 
-type ModifiedAttributes<T extends keyof HTMLElementTagNameMap> = Omit<Partial<HTMLElementTagNameMap[T]>, keyof NewAttributes> & NewAttributes & Record<string, any>;
+type ModifiedAttributes<T extends HTMLElement> = {
+	[K in WritableKeysOf<T> | keyof NewAttributes]?: K extends keyof NewAttributes ? NewAttributes[K] : T[K];
+};
 
-export function createElement<TTag extends keyof HTMLElementTagNameMap>(tagName: TTag, attributes?: ModifiedAttributes<TTag>): HTMLElementTagNameMap[TTag] {
-	const el = document.createElement(tagName);
+export function createElement<
+	TTag extends keyof HTMLElementTagNameMap,
+	T extends HTMLElementTagNameMap[TTag] = HTMLElementTagNameMap[TTag]
+>(tagName: TTag, attributes?: ModifiedAttributes<T>): T {
+	const el = document.createElement(tagName) as T;
 	if (attributes) {
 		if (attributes.children) {
 			if (Array.isArray(attributes.children))
@@ -21,13 +28,20 @@ export function createElement<TTag extends keyof HTMLElementTagNameMap>(tagName:
 			for (const styleKey in attributes.style)
 				el.style[styleKey] = attributes.style[styleKey]!;
 		}
-		for (let key in attributes) {
+		let key: keyof T & string;
+		for (key in attributes) {
 			if (["children", "classList", "style"].includes(key))
 				continue;
-			(el as any)[key] = attributes[key];
+			const descriptor = Object.getOwnPropertyDescriptor(attributes, key)!;
+			if ("value" in descriptor)
+				el[key] = descriptor.value;
+			else if (key in el)
+				throw new Error(`Cannot redefine existing property '${key}' on ${tagName} element`);
+			else
+				Object.defineProperty(el, key, descriptor);
 		}
 	}
-	return el;
+	return el as T;
 }
 
 export function createTextElement(text: string): HTMLSpanElement;

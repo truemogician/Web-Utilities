@@ -1,11 +1,14 @@
 {
 	"name": "browser-utilities",
-	"version": "1.1.1",
+	"version": "1.2.0",
 	"description": "Utilities for browser-based applications",
 	"main": "lib/index.js",
 	"scripts": {
 		"build": "tsc"
 	},
 	"author": "true_mogician",
-	"license": "MIT"
+	"license": "MIT",
+	"devDependencies": {
+		"type-fest": "^4.2.0"
+	}
 }
