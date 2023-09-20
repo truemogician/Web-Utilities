@@ -1,11 +1,14 @@
 {
 	"name": "common-utilities",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"description": "Utilities without platform specific dependencies",
 	"main": "lib/index.js",
 	"scripts": {
-		"build": "tsc"
+		"build": "tsc --build ./tsconfig.json"
 	},
 	"author": "true_mogician",
-	"license": "MIT"
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.6.3"
+	}
 }

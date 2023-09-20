@@ -1,4 +1,4 @@
-export interface FetchThrottleConfig {
+export interface ThrottleConfig {
 	/**
 	 * The scope of applied for concurrency limit. Default is `domain`.
 	 */
@@ -40,6 +40,8 @@ interface QueueItem {
 class RequestPool {
 	private readonly _queue: QueueItem[];
 
+	private readonly _adapter: Fetch;
+
 	private _index = 0;
 
 	private _end = 0;
@@ -52,10 +54,11 @@ class RequestPool {
 
 	public readonly capacity: number;
 
-	public constructor(init: Omit<FetchThrottleConfig, "scope"> & { adapter?: Fetch }) {
+	public constructor(init: Omit<ThrottleConfig, "scope"> & { adapter: Fetch }) {
 		this.maxConcurrency = Math.max(0, init.maxConcurrency);
 		this.maxRetry = Math.max(0, init.maxRetry);
 		this.capacity = Math.max(0, init.capacity);
+		this._adapter = init.adapter;
 		this._queue = this.capacity > 0
 			? new Array<QueueItem>(this.capacity)
 			: new Array<QueueItem>();
@@ -86,7 +89,7 @@ class RequestPool {
 			else
 				item.onFailure?.(error);
 		}
-		fetch(...item.params).then(
+		this._adapter(...item.params).then(
 			response => {
 				if (response.ok)
 					item.onSuccess?.(response);
@@ -115,17 +118,22 @@ class RequestPool {
 	}
 }
 
-interface ThrottledFetch {
-	original: Fetch;
-	throttleConfig: Readonly<FetchThrottleConfig>;
-	(input: FetchParams[0], init?: FetchParams[1]): Promise<Response>;
+export type ThrottledFetch<T extends Fetch = Fetch> = Fetch & {
+	original: T;
+	throttleConfig: Readonly<ThrottleConfig>;
 }
 
-export function throttleFetch(config?: Partial<FetchThrottleConfig>): ThrottledFetch;
-export function throttleFetch(fetch: Fetch, config?: Partial<FetchThrottleConfig>): ThrottledFetch;
-export function throttleFetch(param1?: Fetch | Partial<FetchThrottleConfig>, param2?: Partial<FetchThrottleConfig>): ThrottledFetch {
+export function createThrottledFetch(config?: Partial<ThrottleConfig>): ThrottledFetch;
+export function createThrottledFetch<T extends Fetch = Fetch>(fetch: T, config?: Partial<ThrottleConfig>): ThrottledFetch<T>;
+export function createThrottledFetch(param1?: Fetch | Partial<ThrottleConfig>, param2?: Partial<ThrottleConfig>): ThrottledFetch {
+	if (typeof param1 != "function" && typeof fetch == "undefined") {
+		let message = "`fetch` not available in current environment."
+		if (typeof process != "undefined" && process.version)
+			message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
+		throw new Error(message);
+	}
 	const [original, conf] = typeof param1 == "function" ? [param1, param2] : [fetch, param1];
-	const config: FetchThrottleConfig = {
+	const config: ThrottleConfig = {
 		scope: "domain",
 		maxConcurrency: 0,
 		maxRetry: 1,

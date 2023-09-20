@@ -1,8 +1,8 @@
 {
 	"compilerOptions": {
 		"target": "ESNext",
-		"module": "ESNext",
-		"moduleResolution": "Node16",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
 		"lib": ["ESNext", "DOM"],
 		"esModuleInterop": true,
 		"experimentalDecorators": true,

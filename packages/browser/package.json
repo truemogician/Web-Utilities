@@ -1,14 +1,14 @@
 {
 	"name": "browser-utilities",
-	"version": "1.2.0",
+	"version": "2.0.0",
 	"description": "Utilities for browser-based applications",
 	"main": "lib/index.js",
 	"scripts": {
-		"build": "tsc"
+		"build": "tsc --build ./tsconfig.json"
 	},
 	"author": "true_mogician",
 	"license": "MIT",
 	"devDependencies": {
-		"type-fest": "^4.2.0"
+		"type-fest": "^4.3.1"
 	}
 }

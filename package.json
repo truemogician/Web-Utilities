@@ -1,6 +1,6 @@
 {
 	"name": "utilities",
-	"version": "1.0.2",
+	"version": "1.1.0",
 	"description": "Utilities for both browser and node.",
 	"main": "packages/common/lib/index.js",
 	"exports": {
