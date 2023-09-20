@@ -1,4 +1,4 @@
-export interface RequestThrottlerConfig {
+export interface FetchThrottleConfig {
 	/**
 	 * The scope of applied for concurrency limit. Default is `domain`.
 	 */
@@ -25,10 +25,10 @@ export interface RequestThrottlerConfig {
 
 type Fetch = typeof fetch;
 
-type RequestTuple = [Parameters<Fetch>[0], Parameters<Fetch>[1]];
+type FetchParams = Parameters<Fetch>;
 
 interface QueueItem {
-	params: RequestTuple;
+	params: FetchParams;
 
 	retried: number;
 
@@ -38,7 +38,7 @@ interface QueueItem {
 }
 
 class RequestPool {
-	private readonly _queue!: QueueItem[];
+	private readonly _queue: QueueItem[];
 
 	private _index = 0;
 
@@ -46,14 +46,16 @@ class RequestPool {
 
 	private _concurrency = 0;
 
-	public readonly capacity;
+	public readonly maxConcurrency: number;
 
-	public constructor(
-		public readonly maxConcurrency: number,
-		public readonly maxRetry: number,
-		capacity?: number
-	) {
-		this.capacity = Math.max(0, capacity ?? 0);
+	public readonly maxRetry: number;
+
+	public readonly capacity: number;
+
+	public constructor(init: Omit<FetchThrottleConfig, "scope"> & { adapter?: Fetch }) {
+		this.maxConcurrency = Math.max(0, init.maxConcurrency);
+		this.maxRetry = Math.max(0, init.maxRetry);
+		this.capacity = Math.max(0, init.capacity);
 		this._queue = this.capacity > 0
 			? new Array<QueueItem>(this.capacity)
 			: new Array<QueueItem>();
@@ -99,7 +101,7 @@ class RequestPool {
 		});
 	}
 
-	public add(request: RequestTuple, onSuccess?: (response: Response) => void, onFailure?: (error: any) => void) {
+	public add(request: FetchParams, onSuccess?: (response: Response) => void, onFailure?: (error: any) => void) {
 		if (this.capacity > 0 && this._end - this._index >= this.capacity)
 			throw new Error("Request pool is full");
 		this.push({
@@ -113,45 +115,50 @@ class RequestPool {
 	}
 }
 
-export class RequestThrottler {
-	private _pools = new Map<string, RequestPool>();
+interface ThrottledFetch {
+	original: Fetch;
+	throttleConfig: Readonly<FetchThrottleConfig>;
+	(input: FetchParams[0], init?: FetchParams[1]): Promise<Response>;
+}
 
-	readonly config: Readonly<RequestThrottlerConfig>;
-
-	constructor(config?: Partial<RequestThrottlerConfig>) {
-		this.config = {
-			scope: "domain",
-			maxConcurrency: 0,
-			maxRetry: 1,
-			capacity: 0,
-			...config,
-		}
-	}
-
-	fetch(input: Parameters<Fetch>[0], init?: Parameters<Fetch>[1]): Promise<Response> {
-		let url = input instanceof URL ? input : typeof input == "string" ? input : input.url;
-		if (typeof url == "string") {
-			if (url.startsWith("/"))
-				url = location.origin + url;
-			try {
-				url = new URL(url);
+export function throttleFetch(config?: Partial<FetchThrottleConfig>): ThrottledFetch;
+export function throttleFetch(fetch: Fetch, config?: Partial<FetchThrottleConfig>): ThrottledFetch;
+export function throttleFetch(param1?: Fetch | Partial<FetchThrottleConfig>, param2?: Partial<FetchThrottleConfig>): ThrottledFetch {
+	const [original, conf] = typeof param1 == "function" ? [param1, param2] : [fetch, param1];
+	const config: FetchThrottleConfig = {
+		scope: "domain",
+		maxConcurrency: 0,
+		maxRetry: 1,
+		capacity: 0,
+		...conf,
+	};
+	const pools = new Map<string, RequestPool>();
+	return Object.assign(
+		(input: FetchParams[0], init?: FetchParams[1]): Promise<Response> => {
+			let url = input instanceof URL ? input : typeof input == "string" ? input : input.url;
+			if (typeof url == "string") {
+				if (url.startsWith("/"))
+					url = location.origin + url;
+				try {
+					url = new URL(url);
+				}
+				catch {
+					throw new TypeError(`Invalid URL: ${url}`);
+				}
 			}
-			catch {
-				throw new TypeError(`Invalid URL: ${url}`);
-			}
+			const scope = config.scope;
+			const key = scope == "global" ? "global"
+				: scope == "domain" ? url.host
+					: scope == "path" ? url.origin + url.pathname
+						: url.toString();
+			if (!pools.has(key))
+				pools.set(key, new RequestPool({ ...config, adapter: original }));
+			const pool = pools.get(key)!;
+			return new Promise((resolve, reject) => pool.add([input, init], resolve, reject));
+		},
+		{
+			original,
+			throttleConfig: config
 		}
-		const scope = this.config.scope;
-		const key = scope == "global" ? "global"
-			: scope == "domain" ? url.host
-				: scope == "path" ? url.origin + url.pathname
-					: url.toString();
-		if (!this._pools.has(key))
-			this._pools.set(key, new RequestPool(
-				this.config.maxConcurrency,
-				this.config.maxRetry,
-				this.config.capacity
-			));
-		const pool = this._pools.get(key)!;
-		return new Promise((resolve, reject) => pool.add([input, init], resolve, reject));
-	}
+	);
 }
