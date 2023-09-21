@@ -1,6 +1,6 @@
 {
 	"name": "common-utilities",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"description": "Utilities without platform specific dependencies",
 	"main": "lib/index.js",
 	"scripts": {
