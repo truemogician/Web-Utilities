@@ -224,7 +224,7 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 			message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
 		throw new Error(message);
 	}
-	const [original, config] = typeof param1 === "function" ? [param1, param2 ?? {}] : [fetch, param1 ?? {}];
+	const [original, config] = typeof param1 === "function" ? [param1, param2 ?? {}] : [globalThis.fetch.bind(globalThis), param1 ?? {}];
 	const filterRequest = "filterRequest" in config ? config.filterRequest : createRequestFilter(config);
 	const filterResponse = "filterResponse" in config ? config.filterResponse : createResponseFilter(config);
 	const generateKey = "generateKey" in config ? config.generateKey : createKeyGenerator(config);

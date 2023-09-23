@@ -132,7 +132,7 @@ export function createThrottledFetch(param1?: Fetch | Partial<ThrottleConfig>, p
 			message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
 		throw new Error(message);
 	}
-	const [original, conf] = typeof param1 == "function" ? [param1, param2] : [fetch, param1];
+	const [original, conf] = typeof param1 == "function" ? [param1, param2] : [globalThis.fetch.bind(globalThis), param1];
 	const config: ThrottleConfig = {
 		scope: "domain",
 		maxConcurrency: 0,
