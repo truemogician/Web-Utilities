@@ -11,9 +11,6 @@
 		"strict": true,
 		"noImplicitOverride": true,
 		"sourceMap": true,
-		"declaration": true,
-		"baseUrl": "./",
-		"outDir": "./lib",
-		"incremental": true
+		"declaration": true
 	}
 }
