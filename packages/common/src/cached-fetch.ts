@@ -238,9 +238,24 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 	return Object.assign(
 		async (input: FetchParams[0], init?: FetchParams[1]): Promise<Response> => {
 			const request = input instanceof Request ? input : new Request(input, init);
-			if (await filterRequest(request) === false)
+			let shouldCache: boolean;
+			try {
+				shouldCache = await filterRequest(request);
+			}
+			catch (error) {
+				console.error("Failed to filter request: ", error);
 				return original(request);
-			const key = await generateKey(request);
+			}
+			if (shouldCache === false)
+				return original(request);
+			let key: number;
+			try {
+				key = await generateKey(request);
+			}
+			catch (error) {
+				console.error("Failed to generate cache key: ", error);
+				return original(request);
+			}
 			const cache = storage.get(key);
 			if (cache != undefined) {
 				if (cache instanceof Response) {
@@ -250,15 +265,26 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 				else if (config.cachePromise)
 					return noClone ? await cache : await cache.then(r => r.clone());
 			}
-			const promise = original(request).then(async response => {
-				if (await filterResponse(response)) {
-					storage.set(key, response);
-					return noClone ? response : response.clone();
-				}
-				if (config.cachePromise)
-					storage.delete(key);
-				return response;
-			});
+			const promise = original(request)
+				.finally(() => {
+					if (config.cachePromise)
+						storage.delete(key);
+				})
+				.then(async response => {
+					let shouldCache: boolean;
+					try {
+						shouldCache = await filterResponse(response);
+					}
+					catch (error) {
+						console.error("Failed to filter response: ", error);
+						return response;
+					}
+					if (shouldCache) {
+						storage.set(key, response);
+						return noClone ? response : response.clone();
+					}
+					return response;
+				});
 			if (config.cachePromise)
 				storage.set(key, promise);
 			return await promise;
