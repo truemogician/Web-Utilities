@@ -205,6 +205,11 @@ export type CacheConfig =
 		 * Default is `false`.
 		 */
 		cachePromise?: boolean;
+		/**
+		 * The body of a `Response` could only be consumed once. If set to `true`, the response will be cloned before being cached to avoid this problem.  
+		 * Default is `true`.
+		 */
+		cloneResponse?: boolean;
 	};
 
 type Fetch = typeof fetch;
@@ -229,6 +234,7 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 	const filterResponse = "filterResponse" in config ? config.filterResponse : createResponseFilter(config);
 	const generateKey = "generateKey" in config ? config.generateKey : createKeyGenerator(config);
 	const storage = "storage" in config ? config.storage : new MemoryCacheStorage(config);
+	const noClone = config.cloneResponse === false;
 	return Object.assign(
 		async (input: FetchParams[0], init?: FetchParams[1]): Promise<Response> => {
 			const request = input instanceof Request ? input : new Request(input, init);
@@ -236,16 +242,20 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 				return original(request);
 			const key = await generateKey(request);
 			const cache = storage.get(key);
-			if (cache instanceof Response) {
-				storage.touch(key);
-				return cache;
-			}
-			else if (cache instanceof Promise && config.cachePromise)
-				return await cache;
-			const promise = original(request).then(async response => {
-				if (await filterResponse(response))
-					storage.set(key, response);
+			if (cache != undefined) {
+				if (cache instanceof Response) {
+					storage.touch(key);
+					return noClone ? cache : cache.clone();
+				}
 				else if (config.cachePromise)
+					return noClone ? await cache : await cache.then(r => r.clone());
+			}
+			const promise = original(request).then(async response => {
+				if (await filterResponse(response)) {
+					storage.set(key, response);
+					return noClone ? response : response.clone();
+				}
+				if (config.cachePromise)
 					storage.delete(key);
 				return response;
 			});
