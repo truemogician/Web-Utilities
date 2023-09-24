@@ -1,3 +1,4 @@
+import { BasicMemoryCacheStorage, type CacheStorage } from "./cache-storage";
 import { hashCode } from "./hash-code";
 
 type Promisable<T> = T | Promise<T>;
@@ -57,9 +58,9 @@ export interface CacheKeyConfig {
 	 */
 	headers?: string[];
 }
-export type KeyGenerator<K extends string | number = number> = (request: Request) => Promisable<K>;
+export type RequestHasher = (request: Request) => Promisable<number>;
 const escape = (str: string) => str.replaceAll("\\", "\\\\").replaceAll("=", "\\=");
-export const createKeyGenerator = (config: Readonly<CacheKeyConfig>): KeyGenerator =>
+export const createRequestHasher = (config: Readonly<CacheKeyConfig>): RequestHasher =>
 	request => {
 		if (request.body != null)
 			request = request.clone();
@@ -91,113 +92,12 @@ export interface CacheStorageConfig {
 	 */
 	ttl?: number;
 }
-export interface CacheStorage<K extends string | number = number> {
-	has(key: K): boolean;
-	get(key: K): Promisable<Response> | undefined;
-	set(key: K, value: Promisable<Response>): void;
-	touch(key: K): boolean;
-	delete(key: K): boolean;
-}
-export class MemoryCacheStorage implements CacheStorage<number> {
-	static minMaintainenceInterval = 1000;
-	private _lastMaintained?: number;
-	private _schedule?: [timer: number | NodeJS.Timeout, timestamp: number];
-	protected readonly map = new Map<number, [response: Promisable<Response>, timestamp: number]>();
-	/**
-	 * Expiration time in milliseconds.
-	 */
-	readonly ttl: number;
-
-	constructor(config: Readonly<CacheStorageConfig>) {
-		this.ttl = (config.ttl ?? 300) * 1000;
-	}
-
-	protected get top(): [number, [Promisable<Response>, number]] | undefined {
-		const result = this.map.entries().next();
-		return result.done === true ? undefined : result.value;
-	}
-
-	protected maintain(): number {
-		const top = this.top;
-		const now = Date.now();
-		this._lastMaintained = now;
-		if (top == undefined || now - top[1][1] <= this.ttl)
-			return 0;
-		let count = 0;
-		for (const [key, [_, timestamp]] of this.map.entries()) {
-			if (now - timestamp <= this.ttl)
-				break;
-			++count;
-			this.map.delete(key);
-		}
-		return count;
-	}
-	protected startMaintainence(): void {
-		const now = Date.now();
-		if (this._lastMaintained == undefined || now - this._lastMaintained > MemoryCacheStorage.minMaintainenceInterval)
-			this.maintain();
-		const top = this.top;
-		if (top == undefined)
-			return;
-		const nextTime = Math.max(top[1][1], this._lastMaintained! + MemoryCacheStorage.minMaintainenceInterval);
-		if (this._schedule && this._schedule[1] >= nextTime)
-			return;
-		if (this._schedule)
-			clearTimeout(this._schedule[0]);
-		const timer = setTimeout(() => {
-			this._schedule = undefined;
-			this.startMaintainence();
-		}, nextTime - now);
-		this._schedule = [timer, nextTime];
-	}
-	has(key: number): boolean {
-		const result = this.map.get(key);
-		if (result == undefined)
-			return false;
-		if (Date.now() - result[1] > this.ttl) {
-			this.map.delete(key);
-			return false;
-		}
-		return true;
-	}
-	get(key: number): Promisable<Response> | undefined {
-		const result = this.map.get(key);
-		if (result == undefined)
-			return undefined;
-		if (Date.now() - result[1] > this.ttl) {
-			this.map.delete(key);
-			return undefined;
-		}
-		return result[0];
-	}
-	set(key: number, value: Promisable<Response>): this {
-		this.map.delete(key);
-		this.map.set(key, [value, Date.now()]);
-		this.startMaintainence();
-		return this;
-	}
-	touch(key: number): boolean {
-		let result = this.map.get(key);
-		if (result == undefined)
-			return false;
-		this.map.delete(key);
-		result[1] = Date.now();
-		this.map.set(key, result);
-		return true;
-	}
-	delete(key: number): boolean {
-		return this.map.delete(key);
-	}
-	clear(): void {
-		this.map.clear();
-	}
-}
 
 export type CacheConfig =
 	& (RequestFilterConfig | { filterRequest: RequestFilter })
 	& (ResponseFilterConfig | { filterResponse: ResponseFilter })
-	& (CacheKeyConfig | { generateKey: KeyGenerator })
-	& (CacheStorageConfig | { storage: CacheStorage })
+	& (CacheKeyConfig | { hashRequest: RequestHasher })
+	& (CacheStorageConfig | { storage: CacheStorage<number, Promisable<Response>> })
 	& {
 		/**
 		 * In some occasions, the same request may be sent multiple times before the first response is received.  
@@ -232,8 +132,8 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 	const [original, config] = typeof param1 === "function" ? [param1, param2 ?? {}] : [globalThis.fetch.bind(globalThis), param1 ?? {}];
 	const filterRequest = "filterRequest" in config ? config.filterRequest : createRequestFilter(config);
 	const filterResponse = "filterResponse" in config ? config.filterResponse : createResponseFilter(config);
-	const generateKey = "generateKey" in config ? config.generateKey : createKeyGenerator(config);
-	const storage = "storage" in config ? config.storage : new MemoryCacheStorage(config);
+	const hashRequest = "hashRequest" in config ? config.hashRequest : createRequestHasher(config);
+	const storage = "storage" in config ? config.storage : new BasicMemoryCacheStorage<Response>({ ttl: (config.ttl ?? 300) * 1000 });
 	const noClone = config.cloneResponse === false;
 	return Object.assign(
 		async (input: FetchParams[0], init?: FetchParams[1]): Promise<Response> => {
@@ -250,7 +150,7 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 				return original(request);
 			let key: number;
 			try {
-				key = await generateKey(request);
+				key = await hashRequest(request);
 			}
 			catch (error) {
 				console.error("Failed to generate cache key: ", error);
