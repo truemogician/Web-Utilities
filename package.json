@@ -1,16 +1,16 @@
 {
 	"name": "utilities",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"description": "Utilities for both browser and node.",
 	"main": "packages/common/lib/index.js",
 	"exports": {
 		".": "./packages/common/lib/index.js",
 		"./common": "./packages/common/lib/index.js",
-		"./common/*": "./packages/common/lib/*",
+		"./common/*": "./packages/common/lib/*.js",
 		"./browser": "./packages/browser/lib/index.js",
-		"./browser/*": "./packages/browser/lib/*",
+		"./browser/*": "./packages/browser/lib/*.js",
 		"./node": "./packages/node/lib/index.js",
-		"./node/*": "./packages/node/lib/*"
+		"./node/*": "./packages/node/lib/*.js"
 	},
 	"scripts": {
 		"build": "pwsh ./scripts/build.ps1"

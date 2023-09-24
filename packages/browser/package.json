@@ -3,6 +3,11 @@
 	"version": "2.0.0",
 	"description": "Utilities for browser-based applications",
 	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
+	"exports": {
+		".": "./lib/index.js",
+		"./*": "./lib/*.js"
+	},
 	"scripts": {
 		"build": "tsc --build ./tsconfig.json"
 	},
