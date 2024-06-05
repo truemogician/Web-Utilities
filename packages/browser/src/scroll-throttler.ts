@@ -68,8 +68,8 @@ export class ScrollThrottler<T extends HTMLElement | Window = Window> {
 		if (this._entries.has(element))
 			return false;
 		const handler = this.createScrollHandler(element);
-		this._entries.set(element, { time: -1, position: -1, handler });
 		element.addEventListener("scroll", handler as any);
+		this._entries.set(element, { time: -1, position: -1, handler });
 		return true;
 	}
 
@@ -78,6 +78,7 @@ export class ScrollThrottler<T extends HTMLElement | Window = Window> {
 			return false;
 		const { handler } = this._entries.get(element)!;
 		element.removeEventListener("scroll", handler as any);
+		this._entries.delete(element);
 		return true;
 	}
 }
