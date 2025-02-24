@@ -11,6 +11,12 @@ export interface ThrottleConfig {
 	maxConcurrency: number;
 
 	/**
+	 * The interval in milliseconds for rate limiting.
+	 * If equal to or less than 0, no rate limiting will be applied. Default is 0.
+	 */
+	interval: number;
+
+	/**
 	 * The maximum number of retries when failed.
 	 * If equal to or less than 0, no retry will be performed. Default is 1.
 	 */
@@ -40,6 +46,8 @@ interface QueueItem {
 class RequestPool {
 	private readonly _queue: QueueItem[];
 
+	private readonly _timestamps?: number[];
+
 	private readonly _adapter: Fetch;
 
 	private _index = 0;
@@ -50,22 +58,40 @@ class RequestPool {
 
 	public readonly maxConcurrency: number;
 
+	public readonly interval: number;
+
 	public readonly maxRetry: number;
 
 	public readonly capacity: number;
 
 	public constructor(init: Omit<ThrottleConfig, "scope"> & { adapter: Fetch }) {
-		this.maxConcurrency = Math.max(0, init.maxConcurrency);
+		this.maxConcurrency = init.maxConcurrency > 0 ? init.maxConcurrency : Infinity;
+		this.interval = Math.max(0, init.interval);
 		this.maxRetry = Math.max(0, init.maxRetry);
 		this.capacity = Math.max(0, init.capacity);
 		this._adapter = init.adapter;
 		this._queue = this.capacity > 0
 			? new Array<QueueItem>(this.capacity)
 			: new Array<QueueItem>();
+		if (init.maxConcurrency > 0 && init.interval > 0)
+			this._timestamps = new Array<number>(init.maxConcurrency);
 	}
 
-	private pop(): QueueItem {
+	private get nextTimestamp(): number | undefined {
+		if (!this._timestamps)
+			return undefined;
+		if (this._index < this.maxConcurrency)
+			return 0;
+		const idx = this._index % this.maxConcurrency;
+		return this._timestamps[idx] + this.interval;
+	}
+
+	private pop(): QueueItem | undefined {
+		if (this._index >= this._end)
+			return undefined;
 		const item = this._queue[this.capacity ? this._index % this.capacity : this._index];
+		if (this._timestamps)
+			this._timestamps[this._index % this.maxConcurrency] = Date.now();
 		++this._index;
 		return item;
 	}
@@ -78,30 +104,42 @@ class RequestPool {
 		++this._end;
 	}
 
-	private process() {
-		const item = this.pop();
-		++this._concurrency;
-		const handleError = (error: any) => {
-			if (item.retried < this.maxRetry) {
-				++item.retried;
-				this.push(item);
-			}
-			else
-				item.onFailure?.(error);
+	private handleError(item: QueueItem, error: any) {
+		if (item.retried >= this.maxRetry)
+			item.onFailure?.(error);
+		else {
+			++item.retried;
+			this.push(item);
 		}
-		this._adapter(...item.params).then(
-			response => {
-				if (response.ok)
-					item.onSuccess?.(response);
-				else
-					handleError(response);
-			},
-			handleError
-		).finally(() => {
-			--this._concurrency;
-			if (this._index < this._end && this._concurrency < this.maxConcurrency)
-				this.process();
-		});
+	}
+
+	private process() {
+		if (this._concurrency >= this.maxConcurrency)
+			return;
+		const nextTime = this.nextTimestamp;
+		if (nextTime != undefined) {
+			const now = Date.now();
+			if (now < nextTime) {
+				setTimeout(() => this.process(), nextTime - now);
+				return;
+			}
+		}
+		const item = this.pop();
+		if (item == undefined)
+			return;
+		++this._concurrency;
+		this._adapter(...item.params)
+			.finally(() => --this._concurrency)
+			.then(
+				resp => {
+					if (resp.ok)
+						item.onSuccess?.(resp);
+					else
+						this.handleError(item, resp);
+				},
+				error => this.handleError(item, error)
+			)
+			.finally(() => this.process());
 	}
 
 	public add(request: FetchParams, onSuccess?: (response: Response) => void, onFailure?: (error: any) => void) {
@@ -113,8 +151,7 @@ class RequestPool {
 			onSuccess,
 			onFailure
 		});
-		if (this._concurrency < this.maxConcurrency)
-			this.process();
+		this.process();
 	}
 }
 
@@ -136,6 +173,7 @@ export function createThrottledFetch(param1?: Fetch | Partial<ThrottleConfig>, p
 	const config: ThrottleConfig = {
 		scope: "domain",
 		maxConcurrency: 0,
+		interval: 0,
 		maxRetry: 1,
 		capacity: 0,
 		...conf,
