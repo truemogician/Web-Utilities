@@ -41,3 +41,47 @@ export class BrowserStorage {
 		this._storage.clear();
 	}
 }
+
+export function createBrowserStorageEntry<T extends object>(
+	key: string,
+	defaultValue: T,
+	scope: "local" | "session" = "local",
+	useCache: boolean = true
+): T {
+	const storage = scope == "local" ? localStorage : sessionStorage;
+	const existing = storage.getItem(key);
+	const entry = existing == null
+		? { ...defaultValue }
+		: {
+			...defaultValue,
+			...JSON.parse(existing)
+		};
+	storage.setItem(key, JSON.stringify(entry));
+	const result = {} as T;
+	for (const key in entry) {
+		const descriptor: PropertyDescriptor = {
+			configurable: false,
+			enumerable: true
+		};
+		if (useCache) {
+			descriptor.get = () => entry[key];
+			descriptor.set = (value: unknown) => {
+				entry[key] = value;
+				storage.setItem(key, JSON.stringify(entry));
+			}
+		}
+		else {
+			descriptor.get = () => {
+				const entry = JSON.parse(storage.getItem(key)!);
+				return entry[key];
+			}
+			descriptor.set = (value: unknown) => {
+				const entry = JSON.parse(storage.getItem(key)!);
+				entry[key] = value;
+				storage.setItem(key, JSON.stringify(entry));
+			}
+		}
+		Object.defineProperty(result, key, descriptor);
+	}
+	return result;
+}
