@@ -2,6 +2,7 @@ import type { WritableKeysOf } from "type-fest";
 
 interface NewAttributes {
 	children?: HTMLElement | HTMLElement[];
+	childNodes?: Node | Node[];
 	classList?: string[];
 	style?: Partial<CSSStyleDeclaration>;
 }
@@ -10,17 +11,30 @@ type ModifiedAttributes<T extends HTMLElement> = {
 	[K in WritableKeysOf<T> | keyof NewAttributes]?: K extends keyof NewAttributes ? NewAttributes[K] : T[K];
 };
 
+const overrideProperties: string[] =
+	["children", "childNodes", "classList", "style"] satisfies (keyof NewAttributes)[];
+
 export function createElement<
 	TTag extends keyof HTMLElementTagNameMap,
 	T extends HTMLElementTagNameMap[TTag] = HTMLElementTagNameMap[TTag]
 >(tagName: TTag, attributes?: ModifiedAttributes<T>): T {
 	const el = document.createElement(tagName) as T;
 	if (attributes) {
-		if (attributes.children) {
-			if (Array.isArray(attributes.children))
-				el.append(...attributes.children);
-			else
-				el.append(attributes.children);
+		if (attributes.children || attributes.childNodes) {
+			const nodes = new Array<Node>();
+			if (attributes.children) {
+				if (Array.isArray(attributes.children))
+					nodes.push(...attributes.children);
+				else
+					nodes.push(attributes.children);
+			}
+			if (attributes.childNodes) {
+				if (Array.isArray(attributes.childNodes))
+					nodes.push(...attributes.childNodes);
+				else
+					nodes.push(attributes.childNodes);
+			}
+			el.append(...nodes);
 		}
 		if (attributes.classList)
 			el.classList.add(...attributes.classList);
@@ -30,7 +44,7 @@ export function createElement<
 		}
 		let key: keyof T & string;
 		for (key in attributes) {
-			if (["children", "classList", "style"].includes(key))
+			if (overrideProperties.includes(key))
 				continue;
 			const descriptor = Object.getOwnPropertyDescriptor(attributes, key)!;
 			if ("value" in descriptor)
