@@ -7,7 +7,7 @@ interface NewAttributes {
 	style?: Partial<CSSStyleDeclaration>;
 }
 
-type ModifiedAttributes<T extends HTMLElement> = {
+export type CreateElementAttributes<T extends HTMLElement> = {
 	[K in WritableKeysOf<T> | keyof NewAttributes]?: K extends keyof NewAttributes ? NewAttributes[K] : T[K];
 };
 
@@ -17,7 +17,7 @@ const overrideProperties: string[] =
 export function createElement<
 	TTag extends keyof HTMLElementTagNameMap,
 	T extends HTMLElementTagNameMap[TTag] = HTMLElementTagNameMap[TTag]
->(tagName: TTag, attributes?: ModifiedAttributes<T>): T {
+>(tagName: TTag, attributes?: CreateElementAttributes<T>): T {
 	const el = document.createElement(tagName) as T;
 	if (attributes) {
 		if (attributes.children || attributes.childNodes) {
