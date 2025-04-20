@@ -14,6 +14,7 @@
 	"author": "true_mogician",
 	"license": "MIT",
 	"devDependencies": {
-		"type-fest": "^4.36.0"
+		"type-fest": "^4.40.0",
+		"typescript": "^5.8.3"
 	}
 }
