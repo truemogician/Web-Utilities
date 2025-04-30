@@ -1,12 +1,14 @@
 {
 	"name": "utilities",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"description": "Utilities for both browser and node.",
 	"main": "packages/common/lib/index.js",
 	"exports": {
 		".": "./packages/common/lib/index.js",
 		"./common": "./packages/common/lib/index.js",
 		"./common/*": "./packages/common/lib/*.js",
+		"./fetch-throttler": "./packages/fetch-throttler/lib/index.js",
+		"./fetch-throttler/*": "./packages/fetch-throttler/lib/*.js",
 		"./browser": "./packages/browser/lib/index.js",
 		"./browser/*": "./packages/browser/lib/*.js",
 		"./node": "./packages/node/lib/index.js",
