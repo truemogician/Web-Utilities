@@ -1,1 +1,2 @@
-export { createThrottledFetch, type ThrottledFetch, type ThrottleConfig } from "./throttled-fetch";
+export { createThrottledFetch, type ThrottledFetch } from "./throttled-fetch";
+export type { ThrottleConfig } from "./types";
