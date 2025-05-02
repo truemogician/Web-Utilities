@@ -1,0 +1,11 @@
+# Ignore everything by default
+*
+
+# But keep these files
+!lib/**/*
+!package.json
+!README.md
+!LICENSE
+
+# Ignore source map files in lib
+lib/**/*.map
