@@ -47,16 +47,15 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 	}
 
 	private getOrCreate(url: URL): RequestPool<T> {
-		if (this._customPools.length) {
-			for (const [match, pool] of this._customPools)
-				if (match(url))
-					return pool;
+		for (let i = this._customPools.length - 1; i >= 0; i--) {
+			const item = this._customPools[i];
+			if (item[0](url))
+				return item[1];
 		}
-		if (this._regexPools.length) {
-			const href = url.href;
-			for (const [regex, pool] of this._regexPools)
-				if (regex.test(href))
-					return pool;
+		for (let i = this._regexPools.length - 1; i >= 0; i--) {
+			const item = this._regexPools[i];
+			if (item[0].test(url.href))
+				return item[1];
 		}
 		let pool = this._urlPools.get(this.getKey(url, "path"))
 			?? this._urlPools.get(this.getKey(url, "domain"));
