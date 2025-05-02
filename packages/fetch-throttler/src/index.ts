@@ -1,5 +1,5 @@
-export { createThrottledFetch, ThrottledFetch } from "./ThrottledFetch";
+export { createThrottledFetch, ThrottledFetch, type ThrottledFetchInst } from "./ThrottledFetch";
 export type {
-	ThrottleConfig, ThrottleScope, DefaultThrottleConfig,
+	Fetch, ExtendedFetch, ThrottleConfig, ThrottleScope, DefaultThrottleConfig,
 	UrlComponentThrottleConfig, RegexThrottleConfig, CustomThrottleConfig, SpecifiedThrottleConfig
 } from "./types";

@@ -1,7 +1,7 @@
-import type { Fetch, FetchParams, FetchReturn, ThrottleConfig } from "./types";
+import type { Fetch, ExtendedFetch, FetchParams, FetchReturn, ThrottleConfig } from "./types";
 import { fillDefaults } from "./utils";
 
-interface QueueItem<T extends Fetch> {
+interface QueueItem<T extends ExtendedFetch<any, any, any>> {
 	params: FetchParams<T>;
 
 	retried: number;
@@ -11,7 +11,7 @@ interface QueueItem<T extends Fetch> {
 	onFailure?(error: Error): void;
 }
 
-export class RequestPool<T extends Fetch = Fetch> {
+export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 	private readonly _queue: QueueItem<T>[];
 
 	private readonly _timestamps?: number[];
@@ -97,7 +97,7 @@ export class RequestPool<T extends Fetch = Fetch> {
 		if (item == undefined)
 			return;
 		++this._concurrency;
-		this._adapter(...item.params as FetchParams)
+		this._adapter(...item.params as unknown as FetchParams)
 			.finally(() => --this._concurrency)
 			.then(resp => {
 				if (resp.ok)

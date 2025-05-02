@@ -2,6 +2,16 @@ import type { Arrayable } from "type-fest";
 
 export type Fetch = typeof fetch;
 
+export interface ExtendedFetch<TReq extends Request = Request, TRes extends Response = Response, TExtra extends [] = []> {
+	(input: TReq): Promise<TRes>;
+	(input: string | URL, init?: RequestInit): Promise<TRes>;
+	(input: string | URL | TReq, init?: RequestInit, ...extra: TExtra): Promise<TRes>;
+}
+
+export type OnlyFetch<T> =
+	T extends ExtendedFetch<infer TReq, infer TRes, infer TExtra>
+	? ExtendedFetch<TReq, TRes, TExtra> : never;
+
 export type FetchParams<T extends Fetch = Fetch> = Parameters<T>;
 
 export type FetchReturn<T extends Fetch = Fetch> = Awaited<ReturnType<T>>;

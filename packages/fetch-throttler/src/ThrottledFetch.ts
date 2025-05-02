@@ -1,14 +1,16 @@
 import { RequestPool } from "./RequestPool";
-import type { Fetch, FetchParams, FetchReturn, ThrottleConfig, DefaultThrottleConfig, ThrottleScope, CustomThrottleConfig, SpecifiedThrottleConfig } from "./types";
+import type {
+	Fetch, ExtendedFetch, FetchParams, FetchReturn, OnlyFetch,
+	ThrottleConfig, DefaultThrottleConfig, ThrottleScope, CustomThrottleConfig, SpecifiedThrottleConfig
+} from "./types";
 import { fillDefaults } from "./utils";
 
 /**
  * Manages throttled fetch requests based on configured rules.
- * It allows setting global, domain-specific, path-specific, regex-based, or custom
- * throttling configurations.
+ * It allows setting global, domain-specific, path-specific, regex-based, or custom throttling configurations.
  * @template T The type of the underlying fetch function. Defaults to the type of global `fetch`.
  */
-export class ThrottledFetch<T extends Fetch = Fetch> {
+export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 	private readonly _defaultPools = new Map<string, RequestPool<T>>();
 
 	private readonly _urlPools = new Map<string, RequestPool<T>>();
@@ -38,7 +40,7 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 				throw new TypeError(`Invalid adapter: ${adapter}`);
 			if (typeof globalThis.fetch === "undefined") {
 				let message = "`fetch` not available in current environment."
-				if (typeof process !== "undefined" && process.version)
+				if (typeof process === "object" && typeof process.version === "string")
 					message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
 				throw new Error(message);
 			}
@@ -155,15 +157,8 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 	}
 }
 
-/**
- * Creates a throttled fetch function.
- * This function acts like the standard `fetch` but applies throttling rules defined
- * by the `ThrottledFetch` instance it wraps.
- * @template T The type of the underlying fetch function. Defaults to the type of global `fetch`.
- * @param adapter An optional custom fetch-compatible function.
- * @returns A function that behaves like `fetch` but is throttled, and also exposes the `ThrottledFetch` instance methods.
- */
-export function createThrottledFetch<T extends Fetch = Fetch>(adapter?: T): T & ThrottledFetch<T>;
+export type ThrottledFetchInst<T extends ExtendedFetch<any, any, any> = Fetch> = OnlyFetch<T> & ThrottledFetch<T>;
+
 /**
  * Creates a throttled fetch function with custom default configuration.
  * This function acts like the standard `fetch` but applies throttling rules defined
@@ -173,10 +168,19 @@ export function createThrottledFetch<T extends Fetch = Fetch>(adapter?: T): T & 
  * @param adapter An optional custom fetch-compatible function. Defaults to global `fetch`.
  * @returns A function that behaves like `fetch` but is throttled, and also exposes the `ThrottledFetch` instance methods.
  */
-export function createThrottledFetch<T extends Fetch = Fetch>(config?: DefaultThrottleConfig, adapter?: T): T & ThrottledFetch<T>;
-export function createThrottledFetch<T extends Fetch = Fetch>(param1?: T | DefaultThrottleConfig, param2?: T): T & ThrottledFetch<T> {
+export function createThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch>(config?: DefaultThrottleConfig, adapter?: T): ThrottledFetchInst<T>;
+/**
+ * Creates a throttled fetch function.
+ * This function acts like the standard `fetch` but applies throttling rules defined
+ * by the `ThrottledFetch` instance it wraps.
+ * @template T The type of the underlying fetch function. Defaults to the type of global `fetch`.
+ * @param adapter An optional custom fetch-compatible function.
+ * @returns A function that behaves like `fetch` but is throttled, and also exposes the `ThrottledFetch` instance methods.
+ */
+export function createThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch>(adapter?: T): ThrottledFetchInst<T>;
+export function createThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch>(param1?: T | DefaultThrottleConfig, param2?: T): ThrottledFetchInst<T> {
 	const [config, adaptor] = typeof param1 == "function" ? [undefined, param1] : [param1, param2];
-	const inst = new ThrottledFetch(config, adaptor);
+	const inst = new ThrottledFetch<T>(config, adaptor);
 	const func = () => { };
 	const proxy = new Proxy(func, {
 		apply(_, __, args) {
@@ -191,5 +195,5 @@ export function createThrottledFetch<T extends Fetch = Fetch>(param1?: T | Defau
 		preventExtensions: () => Reflect.preventExtensions(inst),
 		ownKeys: () => Reflect.ownKeys(inst)
 	});
-	return proxy as unknown as T & ThrottledFetch<T>;
+	return proxy as unknown as ThrottledFetchInst<T>;
 }
