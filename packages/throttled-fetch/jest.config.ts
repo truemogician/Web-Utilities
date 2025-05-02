@@ -6,7 +6,7 @@ const config: Config = {
 	collectCoverage: true,
 	coverageDirectory: "coverage",
 	transform: {
-		"^.+\\.tsx?$": ["ts-jest", { tsconfig: "tsconfig.json" }]
+		"^.+\\.tsx?$": ["ts-jest", { tsconfig: "tsconfig.test.json" }]
 	}
 };
 

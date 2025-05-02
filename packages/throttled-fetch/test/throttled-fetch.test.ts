@@ -1,4 +1,5 @@
 import { createThrottledFetch } from "../src/throttled-fetch";
+import type { Fetch } from "../src/types";
 import { TestAdaptor } from "./TestAdaptor";
 
 interface TestResp {
@@ -9,34 +10,37 @@ interface TestResp {
 
 describe("Throttled Fetch", () => {
 	const testUrl = "https://example.com";
+	const latency = 100;
+	const timeMargin = 20;
 
 	test("Max Concurrency", async () => {
-		const adaptor = new TestAdaptor(1000);
-		const fetch = createThrottledFetch(adaptor.fetch, { maxConcurrency: 2 });
+		const adaptor = new TestAdaptor(latency);
+		const fetch = createThrottledFetch({ maxConcurrency: 2 }, adaptor.fetch);
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
 			promises.push(fetch(testUrl).then(resp => resp.json()));
 		const resps = await Promise.all(promises);
 		expect(resps.length).toBe(3);
-		expect(resps[1].start - resps[0].start).toBeLessThan(100);
-		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(1000);
+		expect(resps[1].start - resps[0].start).toBeLessThan(timeMargin);
+		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(latency);
 	});
 
 	test("Max Retry", async () => {
-		const adaptor = new TestAdaptor(100, { status: 500 });
-		const fetch = createThrottledFetch(adaptor.fetch, { maxRetry: 2 });
+		const adaptor = new TestAdaptor(latency, { status: 500 });
+		const maxRetry = 2;
+		const fetch = createThrottledFetch({ maxRetry }, adaptor.fetch);
 		const start = performance.now();
 		const resp = await fetch(testUrl).catch(err => err);
 		const end = performance.now();
 		expect(resp.status).toBe(500);
-		expect(end - start).toBeGreaterThanOrEqual(290);
+		expect(end - start).toBeGreaterThanOrEqual(latency * (maxRetry + 1) - timeMargin);
 		const json = await resp.json();
 		expect(json.id).toBe(2);
 	});
 
 	test("Capacity", async () => {
-		const adaptor = new TestAdaptor(1000);
-		const fetch = createThrottledFetch(adaptor.fetch, { maxConcurrency: 1, capacity: 1 });
+		const adaptor = new TestAdaptor(latency);
+		const fetch = createThrottledFetch({ maxConcurrency: 1, capacity: 1 }, adaptor.fetch);
 		const promise = fetch(testUrl).then(resp => resp.json());
 		fetch(testUrl);
 		expect(() => fetch(testUrl)).rejects.toThrow();
@@ -45,13 +49,146 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Interval", async () => {
-		const adaptor = new TestAdaptor(500);
-		const fetch = createThrottledFetch(adaptor.fetch, { maxConcurrency: 2, interval: 2000 });
+		const adaptor = new TestAdaptor(latency);
+		const interval = 500;
+		const fetch = createThrottledFetch({ maxConcurrency: 2, interval }, adaptor.fetch);
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
 			promises.push(fetch(testUrl).then(resp => resp.json()));
 		const resps = await Promise.all(promises);
-		expect(resps[1].start - resps[0].start).toBeLessThan(100);
-		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(2000);
+		expect(resps[1].start - resps[0].start).toBeLessThan(timeMargin);
+		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(interval);
+	});
+
+	const apiDomain = "https://api.example.com";
+	const imgDomain = "https://images.example.com";
+	const cdnDomain = "https://cdn.example.com";
+
+	test("Configure", async () => {
+		const adaptor = new TestAdaptor(latency);
+		const fetch = createThrottledFetch(adaptor.fetch);
+
+		// API paths
+		const apiPath = "/api";
+		const dataPath = "/data";
+
+		// Test URL scope configuration - domain scope
+		fetch.configure({
+			scope: "domain",
+			url: apiDomain,
+			maxConcurrency: 1
+		});
+		// Test URL scope configuration - path scope
+		fetch.configure({
+			scope: "path",
+			url: [testUrl + apiPath, testUrl + dataPath],
+			maxConcurrency: 2
+		});
+		// Test Regex configuration
+		fetch.configure({
+			regex: new RegExp(`^${imgDomain}`),
+			maxConcurrency: 2
+		});
+		// Test Custom match configuration
+		fetch.configure({
+			match: url => url.hostname.includes("cdn"),
+			interval: 1000
+		});
+
+		// Test the domain-specific throttling works
+		const apiUrl = `${apiDomain}${dataPath}`;
+		const apiPromises = [
+			fetch(apiUrl).then(resp => resp.json()),
+			fetch(apiUrl).then(resp => resp.json())
+		];
+		const apiResps = await Promise.all(apiPromises);
+		expect(apiResps[1].start - apiResps[0].start).toBeGreaterThanOrEqual(latency);
+		// Test the path-specific throttling
+		const pathPromises = [
+			fetch(testUrl + apiPath).then(resp => resp.json()),
+			fetch(testUrl + apiPath).then(resp => resp.json()),
+			fetch(testUrl + dataPath).then(resp => resp.json())
+		];
+		const pathResps = await Promise.all(pathPromises);
+		expect(pathResps[1].start - pathResps[0].start).toBeLessThan(timeMargin);
+		expect(pathResps[2].start - pathResps[0].start).toBeGreaterThanOrEqual(latency);
+		// Test regex configuration works
+		const imgPromises = [
+			fetch(`${imgDomain}/a`).then(resp => resp.json()),
+			fetch(`${imgDomain}:8443/b`).then(resp => resp.json()),
+			fetch(`${imgDomain}.uk/c`).then(resp => resp.json())
+		];
+		const imgResps = await Promise.all(imgPromises);
+		expect(imgResps[1].start - imgResps[0].start).toBeLessThan(timeMargin);
+		expect(imgResps[2].start - imgResps[0].start).toBeGreaterThanOrEqual(latency);
+		// Test custom matcher works
+		const cdnUrl = `${cdnDomain}/assets/img.jpg`;
+		const cdnPromises = [
+			fetch(cdnUrl).then(resp => resp.json()),
+			fetch(cdnUrl).then(resp => resp.json())
+		];
+		const cdnResps = await Promise.all(cdnPromises);
+		expect(cdnResps[1].start - cdnResps[0].start).toBeGreaterThanOrEqual(1000);
+	});
+
+	test("URL Parsing", async () => {
+		const adaptor = new TestAdaptor(latency);
+		const fetch = createThrottledFetch(adaptor.fetch);
+
+		// Test with URL object
+		const url = new URL(`${testUrl}/test`);
+		const resp1 = await fetch(url).then(resp => resp.json());
+		expect(resp1.id).toBe(0);
+
+		// Test with Request object
+		const req = new Request(`${testUrl}/request`);
+		const resp2 = await fetch(req).then(resp => resp.json());
+		expect(resp2.id).toBe(1);
+
+		// Test invalid URL handling
+		expect(() => fetch("invalid-url")).toThrow(TypeError);
+	});
+
+	test("Error handling", async () => {
+		const adaptor = new TestAdaptor(latency);
+		const fetch = createThrottledFetch(adaptor.fetch);
+
+		// Test configuration error handling
+		expect(() => fetch.configure({
+			// @ts-expect-error - Testing runtime validation
+			scope: "invalid-scope",
+			url: testUrl
+		})).toThrow(TypeError);
+
+		expect(() => fetch.configure({
+			scope: "domain",
+			url: "not-a-valid-url"
+		})).toThrow(TypeError);
+
+		// Test configuration conflict
+		fetch.configure({
+			scope: "domain",
+			url: apiDomain,
+			maxConcurrency: 1
+		});
+
+		expect(() => fetch.configure({
+			scope: "domain",
+			url: apiDomain,
+			maxConcurrency: 2
+		})).toThrow(Error);
+
+		// Test invalid config object
+		expect(() => fetch.configure({
+			// @ts-expect-error - Testing missing required properties
+			unknownProp: true
+		})).toThrow(TypeError);
+
+		// Test network error handling
+		const errorFetch = createThrottledFetch({
+			maxRetry: 1
+		}, (() => Promise.reject(new Error("Network failure"))) as unknown as Fetch);
+
+		await expect(errorFetch(testUrl)).rejects.toThrow("Network failure");
 	});
 });
