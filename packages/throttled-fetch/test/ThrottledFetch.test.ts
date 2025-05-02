@@ -1,4 +1,4 @@
-import { createThrottledFetch } from "../src/throttled-fetch";
+import { createThrottledFetch } from "../src/ThrottledFetch";
 import type { Fetch } from "../src/types";
 import { TestAdaptor } from "./TestAdaptor";
 
