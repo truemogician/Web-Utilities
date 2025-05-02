@@ -1,4 +1,4 @@
-# Throttled Fetch 🚀
+# Fetch Throttler 🚀
 
 A utility package providing fine-grained throttling control for `fetch` requests in both Node.js (v18+) and browser environments.
 
@@ -14,11 +14,11 @@ A utility package providing fine-grained throttling control for `fetch` requests
 ## Installation 📦
 
 ```bash
-npm install throttled-fetch
+npm install fetch-throttler
 # or
-yarn add throttled-fetch
+yarn add fetch-throttler
 # or
-pnpm add throttled-fetch
+pnpm add fetch-throttler
 ```
 
 ## Basic Usage ▶️
@@ -26,7 +26,7 @@ pnpm add throttled-fetch
 Import `createThrottledFetch` and use it as a replacement for the standard `fetch`.
 
 ```typescript
-import { createThrottledFetch } from "throttled-fetch";
+import { createThrottledFetch } from "fetch-throttler";
 
 // Create a throttled fetch instance limiting concurrency to 5 requests globally
 const throttledFetch = createThrottledFetch({ maxConcurrency: 5 });
@@ -39,7 +39,7 @@ throttledFetch("https://api.example.com/data/2");
 
 ## Advanced Configuration 🛠️
 
-The `throttled-fetch` instance provides a `configure` method for setting up more specific throttling rules.
+The `ThrottledFetch` instance provides a `configure` method for setting up more specific throttling rules.
 
 ### Configuration Options ⚙️
 
@@ -59,7 +59,7 @@ You can apply throttling rules based on different criteria:
 Apply rules to specific domains or URL paths using `UrlComponentThrottleConfig`.
 
 ```typescript
-import { createThrottledFetch } from "throttled-fetch";
+import { createThrottledFetch } from "fetch-throttler";
 
 const throttledFetch = createThrottledFetch(); // Start with default global settings
 

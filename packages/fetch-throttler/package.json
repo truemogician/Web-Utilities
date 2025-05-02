@@ -1,5 +1,5 @@
 {
-	"name": "throttled-fetch",
+	"name": "fetch-throttler",
 	"version": "1.0.0",
 	"description": "Fetch with fine-grained throttling control.",
 	"main": "lib/index.js",
