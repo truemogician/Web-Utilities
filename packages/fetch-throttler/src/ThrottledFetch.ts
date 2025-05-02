@@ -2,6 +2,12 @@ import { RequestPool } from "./RequestPool";
 import type { Fetch, FetchParams, FetchReturn, ThrottleConfig, DefaultThrottleConfig, ThrottleScope, CustomThrottleConfig, SpecifiedThrottleConfig } from "./types";
 import { fillDefaults } from "./utils";
 
+/**
+ * Manages throttled fetch requests based on configured rules.
+ * It allows setting global, domain-specific, path-specific, regex-based, or custom
+ * throttling configurations.
+ * @template T The type of the underlying fetch function. Defaults to the type of global `fetch`.
+ */
 export class ThrottledFetch<T extends Fetch = Fetch> {
 	private readonly _defaultPools = new Map<string, RequestPool<T>>();
 
@@ -11,10 +17,19 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 
 	private readonly _customPools = new Array<[match: CustomThrottleConfig["match"], pool: RequestPool<T>]>();
 
+	/**
+	 * The underlying fetch function used to make requests.
+	 */
 	public readonly adapter: T;
 
+	/**
+	 * The default scope applied when creating new request pools if no specific configuration matches.
+	 */
 	public readonly scope: ThrottleScope;
 
+	/**
+	 * The default throttling configuration applied to new request pools.
+	 */
 	public readonly config: Readonly<Required<ThrottleConfig>>;
 
 	public constructor(config?: DefaultThrottleConfig, adapter?: T) {
@@ -70,6 +85,13 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 		return pool;
 	}
 
+	/**
+	 * Invokes the throttled fetch request.
+	 * This method queues the request and executes it according to the matching throttling rules.
+	 * @param args The parameters for the fetch call (URL or Request object, and optional options).
+	 * @returns A promise that resolves with the fetch response or rejects on error.
+	 * @throws {TypeError} If the input URL is invalid.
+	 */
 	public invoke(...args: FetchParams<T>): Promise<FetchReturn<T>> {
 		const input = args[0];
 		let url: URL | string;
@@ -93,6 +115,13 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 		return new Promise((resolve, reject) => pool.add(args, resolve, reject));
 	}
 
+	/**
+	 * Configures specific throttling rules for different scopes (URL, Regex, Custom).
+	 * New requests matching these rules will use a dedicated RequestPool with the specified configuration.
+	 * @param config The specific throttling configuration to apply.
+	 * @throws {TypeError} If the configuration object is invalid or contains an invalid scope or URL.
+	 * @throws {Error} If a pool for the specified URL scope already exists.
+	 */
 	public configure(config: SpecifiedThrottleConfig): void {
 		if ("scope" in config) {
 			const { url, scope, ...conf } = config;
@@ -126,7 +155,24 @@ export class ThrottledFetch<T extends Fetch = Fetch> {
 	}
 }
 
+/**
+ * Creates a throttled fetch function.
+ * This function acts like the standard `fetch` but applies throttling rules defined
+ * by the `ThrottledFetch` instance it wraps.
+ * @template T The type of the underlying fetch function. Defaults to the type of global `fetch`.
+ * @param adapter An optional custom fetch-compatible function.
+ * @returns A function that behaves like `fetch` but is throttled, and also exposes the `ThrottledFetch` instance methods.
+ */
 export function createThrottledFetch<T extends Fetch = Fetch>(adapter?: T): T & ThrottledFetch<T>;
+/**
+ * Creates a throttled fetch function with custom default configuration.
+ * This function acts like the standard `fetch` but applies throttling rules defined
+ * by the `ThrottledFetch` instance it wraps.
+ * @template T The type of the underlying fetch function. Defaults to the type of global `fetch`.
+ * @param config The default throttling configuration and scope.
+ * @param adapter An optional custom fetch-compatible function. Defaults to global `fetch`.
+ * @returns A function that behaves like `fetch` but is throttled, and also exposes the `ThrottledFetch` instance methods.
+ */
 export function createThrottledFetch<T extends Fetch = Fetch>(config?: DefaultThrottleConfig, adapter?: T): T & ThrottledFetch<T>;
 export function createThrottledFetch<T extends Fetch = Fetch>(param1?: T | DefaultThrottleConfig, param2?: T): T & ThrottledFetch<T> {
 	const [config, adaptor] = typeof param1 == "function" ? [undefined, param1] : [param1, param2];
