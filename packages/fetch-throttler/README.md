@@ -109,7 +109,7 @@ Apply rules based on a custom function using `CustomThrottleConfig`.
 ```typescript
 throttledFetch.configure({
     match: (url: URL) => url.pathname.startsWith("/admin"),
-    maxConcurrency: 1, // Very strict limit for admin endpoints
+    maxConcurrency: 1,
     maxRetry: 0
 });
 
@@ -123,3 +123,4 @@ throttledFetch("https://example.com/admin/config"); // Uses the custom matcher p
 *   **Regex/Custom Order:** Since it's impossible to determine if two Regex or Custom matchers are logically exclusive, the matching process for these types checks configurations in *reverse order* (last added takes precedence). If you add two overlapping Regex rules, the one added later via `configure` will be matched first.
 *   **Performance:** URL-based configurations (`domain`, `path`) offer the best performance as they use an internal Map for O(1) lookups. Regex and Custom configurations require iterating through the defined rules for each request, which might introduce overhead, especially with many rules. Use URL-based rules when possible for optimal performance.
 *   **Duplicate URL Scopes:** An error is thrown if you try to configure the exact same URL scope (e.g., the same domain or path string) multiple times via `configure`.
+*   **Custom Adapter Properties:** While you can provide a custom fetch adapter, if your adapter function has additional properties attached to it, these properties will *not* be accessible on the returned `ThrottledFetchInst`. The instance only proxies the function call itself and the methods/properties of the `ThrottledFetch` class.
