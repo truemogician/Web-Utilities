@@ -1,8 +1,10 @@
-type Fetch = typeof fetch;
+import type { Arrayable } from "type-fest";
 
-type FetchParams<T extends Fetch = Fetch> = Parameters<T>;
+export type Fetch = typeof fetch;
 
-type FetchReturn<T extends Fetch = Fetch> = Awaited<ReturnType<T>>;
+export type FetchParams<T extends Fetch = Fetch> = Parameters<T>;
+
+export type FetchReturn<T extends Fetch = Fetch> = Awaited<ReturnType<T>>;
 
 export interface ThrottleConfig {
 	/**
@@ -30,7 +32,7 @@ export interface ThrottleConfig {
 	capacity?: number;
 }
 
-export type ThrottleScope = "global" | "domain" | "path" | "full-url";
+export type ThrottleScope = "global" | "domain" | "path";
 
 export interface DefaultThrottleConfig extends ThrottleConfig {
 	/**
@@ -38,3 +40,31 @@ export interface DefaultThrottleConfig extends ThrottleConfig {
 	 */
 	scope?: ThrottleScope;
 }
+
+export interface UrlComponentThrottleConfig extends ThrottleConfig {
+	/**
+	 * The scope of applied for concurrency limit.
+	 */
+	scope: Exclude<ThrottleScope, "global">;
+
+	/**
+	 * The URL(s) to be matched for the scope.
+	 */
+	url: Arrayable<string | URL>;
+}
+
+export interface RegexThrottleConfig extends ThrottleConfig {
+	/**
+	 * The regex pattern to be matched for the scope.
+	 */
+	regex: RegExp;
+}
+
+export interface CustomThrottleConfig extends ThrottleConfig {
+	/**
+	 * The custom function to be called for the scope.
+	 */
+	match: (url: URL) => boolean;
+}
+
+export type SpecifiedThrottleConfig = UrlComponentThrottleConfig | RegexThrottleConfig | CustomThrottleConfig;

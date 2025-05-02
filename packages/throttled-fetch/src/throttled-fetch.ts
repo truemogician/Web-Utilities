@@ -1,50 +1,150 @@
 import { RequestPool } from "./RequestPool";
-import type { Fetch, FetchParams, ThrottleConfig, DefaultThrottleConfig } from "./types";
+import type { Fetch, FetchParams, FetchReturn, ThrottleConfig, DefaultThrottleConfig, ThrottleScope, CustomThrottleConfig, SpecifiedThrottleConfig } from "./types";
 import { fillDefaults } from "./utils";
 
-export type ThrottledFetch<T extends Fetch = Fetch> = Fetch & {
-	original: T;
-	throttleConfig: Readonly<ThrottleConfig>;
+export class ThrottledFetch<T extends Fetch = Fetch> {
+	private readonly _defaultPools = new Map<string, RequestPool<T>>();
+
+	private readonly _urlPools = new Map<string, RequestPool<T>>();
+
+	private readonly _regexPools = new Array<[regex: RegExp, pool: RequestPool<T>]>();
+
+	private readonly _customPools = new Array<[match: CustomThrottleConfig["match"], pool: RequestPool<T>]>();
+
+	public readonly adapter: T;
+
+	public readonly scope: ThrottleScope;
+
+	public readonly config: Readonly<Required<ThrottleConfig>>;
+
+	public constructor(config?: DefaultThrottleConfig, adapter?: T) {
+		if (typeof adapter !== "function") {
+			if (adapter !== undefined)
+				throw new TypeError(`Invalid adapter: ${adapter}`);
+			if (typeof globalThis.fetch === "undefined") {
+				let message = "`fetch` not available in current environment."
+				if (typeof process !== "undefined" && process.version)
+					message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
+				throw new Error(message);
+			}
+		}
+		const { scope = "global", ...rest } = config ?? {};
+		this.adapter = adapter ?? globalThis.fetch.bind(globalThis) as T;
+		this.scope = scope;
+		this.config = Object.freeze(fillDefaults(rest));
+	}
+
+	private getKey(url: URL, scope?: ThrottleScope): string {
+		scope ??= this.scope;
+		if (scope === "global")
+			return "";
+		else if (scope === "domain")
+			return url.host;
+		else if (scope === "path")
+			return url.origin + url.pathname;
+		else
+			throw new TypeError(`Invalid scope: ${scope}`);
+	}
+
+	private getOrCreate(url: URL): RequestPool<T> {
+		if (this._customPools.length) {
+			for (const [match, pool] of this._customPools)
+				if (match(url))
+					return pool;
+		}
+		if (this._regexPools.length) {
+			const href = url.href;
+			for (const [regex, pool] of this._regexPools)
+				if (regex.test(href))
+					return pool;
+		}
+		let pool = this._urlPools.get(this.getKey(url, "path"))
+			?? this._urlPools.get(this.getKey(url, "domain"));
+		if (pool === undefined) {
+			const key = this.getKey(url);
+			pool = this._defaultPools.get(key);
+			if (pool === undefined) {
+				pool = new RequestPool(this.config, this.adapter);
+				this._defaultPools.set(key, pool);
+			}
+		}
+		return pool;
+	}
+
+	public invoke(...args: FetchParams<T>): Promise<FetchReturn<T>> {
+		const input = args[0];
+		let url: URL | string;
+		if (typeof input == "string" || input instanceof URL)
+			url = input;
+		else if (typeof input == "object" && typeof input.url == "string")
+			url = input.url;
+		else
+			throw new TypeError(`Invalid input: ${input}`);
+		if (typeof url == "string") {
+			if (url.startsWith("/"))
+				url = location.origin + url;
+			try {
+				url = new URL(url);
+			}
+			catch {
+				throw new TypeError(`Invalid URL: ${url}`);
+			}
+		}
+		const pool = this.getOrCreate(url);
+		return new Promise((resolve, reject) => pool.add(args, resolve, reject));
+	}
+
+	public configure(config: SpecifiedThrottleConfig): void {
+		if ("scope" in config) {
+			const { url, scope, ...conf } = config;
+			if (scope !== "domain" && scope !== "path")
+				throw new TypeError(`Invalid scope: ${scope}`);
+			const keys = (Array.isArray(url) ? url : [url]).map(u => {
+				if (typeof location !== "undefined" && typeof u == "string" && u.startsWith("/"))
+					u = location.origin + u;
+				const url = u instanceof URL ? u : URL.parse(u);
+				if (url === null)
+					throw new TypeError(`Invalid URL: ${u}`);
+				return this.getKey(url, scope);
+			});
+			const pool = new RequestPool(conf, this.adapter);
+			for (const key of keys) {
+				if (this._urlPools.has(key))
+					throw new Error(`Pool for ${key} already exists`);
+				this._urlPools.set(key, pool);
+			}
+		}
+		else if ("regex" in config) {
+			const pool = new RequestPool(config, this.adapter);
+			this._regexPools.push([config.regex, pool]);
+		}
+		else if ("match" in config) {
+			const pool = new RequestPool(config, this.adapter);
+			this._customPools.push([config.match, pool]);
+		}
+		else
+			throw new TypeError(`Invalid config: ${config}`);
+	}
 }
 
-export function createThrottledFetch(config?: DefaultThrottleConfig): ThrottledFetch;
-export function createThrottledFetch<T extends Fetch = Fetch>(fetch: T, config?: DefaultThrottleConfig): ThrottledFetch<T>;
-export function createThrottledFetch(param1?: Fetch | DefaultThrottleConfig, param2?: DefaultThrottleConfig): ThrottledFetch {
-	if (typeof param1 != "function" && typeof fetch == "undefined") {
-		let message = "`fetch` not available in current environment."
-		if (typeof process != "undefined" && process.version)
-			message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
-		throw new Error(message);
-	}
-	const [original, conf] = typeof param1 == "function" ? [param1, param2] : [globalThis.fetch.bind(globalThis), param1];
-	const { scope = "global", ...rest } = conf ?? {};
-	const config = fillDefaults(rest);
-	const pools = new Map<string, RequestPool>();
-	return Object.assign(
-		(input: FetchParams[0], init?: FetchParams[1], ...args: any[]): Promise<Response> => {
-			let url = input instanceof URL ? input : typeof input == "string" ? input : input.url;
-			if (typeof url == "string") {
-				if (url.startsWith("/"))
-					url = location.origin + url;
-				try {
-					url = new URL(url);
-				}
-				catch {
-					throw new TypeError(`Invalid URL: ${url}`);
-				}
-			}
-			const key = scope == "global" ? "global"
-				: scope == "domain" ? url.host
-					: scope == "path" ? url.origin + url.pathname
-						: url.toString();
-			if (!pools.has(key))
-				pools.set(key, new RequestPool(config, original));
-			const pool = pools.get(key)!;
-			return new Promise((resolve, reject) => pool.add([input, init, ...args] as any, resolve, reject));
+export function createThrottledFetch<T extends Fetch = Fetch>(adapter?: T): T & ThrottledFetch<T>;
+export function createThrottledFetch<T extends Fetch = Fetch>(config?: DefaultThrottleConfig, adapter?: T): T & ThrottledFetch<T>;
+export function createThrottledFetch<T extends Fetch = Fetch>(param1?: T | DefaultThrottleConfig, param2?: T): T & ThrottledFetch<T> {
+	const [config, adaptor] = typeof param1 == "function" ? [undefined, param1] : [param1, param2];
+	const inst = new ThrottledFetch(config, adaptor);
+	const func = () => { };
+	const proxy = new Proxy(func, {
+		apply(_, __, args) {
+			// @ts-ignore
+			return inst.invoke(...args);
 		},
-		{
-			original,
-			throttleConfig: config
-		}
-	);
+		get: (_, prop, receiver) => Reflect.get(inst, prop, receiver),
+		has: (_, prop) => Reflect.has(inst, prop),
+		getOwnPropertyDescriptor: (_, prop) => Reflect.getOwnPropertyDescriptor(inst, prop),
+		getPrototypeOf: () => Reflect.getPrototypeOf(inst),
+		isExtensible: () => Reflect.isExtensible(inst),
+		preventExtensions: () => Reflect.preventExtensions(inst),
+		ownKeys: () => Reflect.ownKeys(inst)
+	});
+	return proxy as unknown as T & ThrottledFetch<T>;
 }
