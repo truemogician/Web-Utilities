@@ -1,4 +1,4 @@
-import type { Arrayable } from "type-fest";
+import type { Arrayable, Promisable } from "type-fest";
 
 export type Fetch = typeof fetch;
 
@@ -49,6 +49,19 @@ export interface ThrottleConfig {
 	 * @default 0
 	 */
 	capacity?: number;
+
+	/**
+	 * A function that determines whether a request should be retried based on the error or response object.
+	 * @param errOrRes The error or response object from the request.
+	 * @returns Whether the request should be retried.
+	 * - `true`: The request will be retried (up to `maxRetry` times).
+	 * - `false`: If `errOrRes` is a `Response`, the request will succeed (even if the response is not ok);
+	 *  if `errOrRes` is an `Error`, the request will fail without retrying.
+	 * - `void`: The default behavior will be applied (retry on errors and non-ok responses).
+	 * @note If `errOrRes` is a `Response`, make sure to `clone()` it if the response body is needed.
+	 * Otherwise, the caller of `ThrottledFetch` will not be able to consume the response body.
+	 */
+	shouldRetry?: (errOrRes: Error | Response) => Promisable<boolean | void>;
 }
 
 /**

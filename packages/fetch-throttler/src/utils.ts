@@ -1,6 +1,7 @@
+import type { SetOptional } from "type-fest";
 import type { ThrottleConfig } from "./types";
 
-export function fillDefaults(config: ThrottleConfig): Required<ThrottleConfig> {
+export function fillDefaults(config: ThrottleConfig): SetOptional<Required<ThrottleConfig>, "shouldRetry"> {
 	const result = {
 		maxConcurrency: 0,
 		interval: 0,

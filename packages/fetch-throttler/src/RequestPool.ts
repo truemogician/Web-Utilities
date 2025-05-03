@@ -1,3 +1,4 @@
+import { Promisable } from "type-fest";
 import type { Fetch, ExtendedFetch, FetchParams, FetchReturn, ThrottleConfig } from "./types";
 import { fillDefaults } from "./utils";
 
@@ -24,6 +25,8 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 
 	private _concurrency = 0;
 
+	private readonly _shouldRetry: ThrottleConfig["shouldRetry"];
+
 	public readonly maxConcurrency: number;
 
 	public readonly interval: number;
@@ -38,6 +41,7 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 		this.interval = Math.max(0, config.interval);
 		this.maxRetry = Math.max(0, config.maxRetry);
 		this.capacity = Math.max(0, config.capacity);
+		this._shouldRetry = config.shouldRetry;
 		this._adapter = adapter;
 		this._queue = this.capacity > 0
 			? new Array<QueueItem<T>>(this.capacity)
@@ -73,13 +77,23 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 		++this._end;
 	}
 
-	private handleError(item: QueueItem<T>, error: any) {
-		if (item.retried >= this.maxRetry)
-			item.onFailure?.(error);
+	private _handleResult(item: QueueItem<T>, result: any, success: boolean, shouldRetry: boolean | undefined | void): Promisable<void> {
+		shouldRetry ??= success ? !(result as Response).ok : true;
+		if (!shouldRetry && success)
+			item.onSuccess?.(result as FetchReturn<T>);
+		else if (!shouldRetry && !success || shouldRetry && item.retried >= this.maxRetry)
+			item.onFailure?.(result);
 		else {
 			++item.retried;
 			this.push(item);
 		}
+	}
+
+	private handleResult(item: QueueItem<T>, result: any, success: boolean): Promisable<void> {
+		const shouldRetry = this._shouldRetry?.(result);
+		return typeof shouldRetry === "object"
+			? shouldRetry.then(retry => this._handleResult(item, result, success, retry))
+			: this._handleResult(item, result, success, shouldRetry);
 	}
 
 	private process() {
@@ -99,13 +113,8 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 		++this._concurrency;
 		this._adapter(...item.params as unknown as FetchParams)
 			.finally(() => --this._concurrency)
-			.then(resp => {
-				if (resp.ok)
-					item.onSuccess?.(resp as FetchReturn<T>);
-				else
-					this.handleError(item, resp);
-			})
-			.catch(error => this.handleError(item, error))
+			.then(resp => this.handleResult(item, resp, true))
+			.catch(error => this.handleResult(item, error, false))
 			.finally(() => this.process());
 	}
 

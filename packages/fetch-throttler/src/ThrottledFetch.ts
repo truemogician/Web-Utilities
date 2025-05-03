@@ -1,3 +1,4 @@
+import type { SetOptional } from "type-fest";
 import { RequestPool } from "./RequestPool";
 import type {
 	Fetch, ExtendedFetch, FetchParams, FetchReturn, OnlyFetch,
@@ -32,7 +33,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 	/**
 	 * The default throttling configuration applied to new request pools.
 	 */
-	public readonly config: Readonly<Required<ThrottleConfig>>;
+	public readonly config: Readonly<SetOptional<Required<ThrottleConfig>, "shouldRetry">>;
 
 	public constructor(config?: DefaultThrottleConfig, adapter?: T) {
 		if (typeof adapter !== "function") {
