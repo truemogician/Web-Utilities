@@ -23,19 +23,19 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 	/**
 	 * The underlying fetch function used to make requests.
 	 */
-	public readonly adapter: T;
+	readonly adapter: T;
 
 	/**
 	 * The default scope applied when creating new request pools if no specific configuration matches.
 	 */
-	public readonly scope: ThrottleScope;
+	readonly scope: ThrottleScope;
 
 	/**
 	 * The default throttling configuration applied to new request pools.
 	 */
-	public readonly config: Readonly<SetOptional<Required<ThrottleConfig>, "shouldRetry">>;
+	readonly config: Readonly<SetOptional<Required<ThrottleConfig>, "shouldRetry">>;
 
-	public constructor(config?: DefaultThrottleConfig, adapter?: T) {
+	constructor(config?: DefaultThrottleConfig, adapter?: T) {
 		if (typeof adapter !== "function") {
 			if (adapter !== undefined)
 				throw new TypeError(`Invalid adapter: ${adapter}`);
@@ -95,7 +95,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 	 * @returns A promise that resolves with the fetch response or rejects on error.
 	 * @throws {TypeError} If the input URL is invalid.
 	 */
-	public invoke(...args: FetchParams<T>): Promise<FetchReturn<T>> {
+	invoke(...args: FetchParams<T>): Promise<FetchReturn<T>> {
 		const input = args[0];
 		let url: URL | string;
 		if (typeof input == "string" || input instanceof URL)
@@ -125,7 +125,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 	 * @throws {TypeError} If the configuration object is invalid or contains an invalid scope or URL.
 	 * @throws {Error} If a pool for the specified URL scope already exists.
 	 */
-	public configure(config: SpecifiedThrottleConfig): void {
+	configure(config: SpecifiedThrottleConfig): void {
 		if ("scope" in config) {
 			const { url, scope, ...conf } = config;
 			if (scope !== "domain" && scope !== "path")

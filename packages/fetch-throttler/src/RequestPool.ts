@@ -13,71 +13,71 @@ interface QueueItem<T extends ExtendedFetch<any, any, any>> {
 }
 
 export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
-	private readonly _queue: QueueItem<T>[];
+	readonly #queue: QueueItem<T>[];
 
-	private readonly _timestamps?: number[];
+	readonly #timestamps?: number[];
 
-	private readonly _adapter: T;
+	readonly #adapter: T;
 
-	private _index = 0;
+	#index = 0;
 
-	private _end = 0;
+	#end = 0;
 
-	private _concurrency = 0;
+	#concurrency = 0;
 
-	private readonly _shouldRetry: ThrottleConfig["shouldRetry"];
+	readonly #shouldRetry: ThrottleConfig["shouldRetry"];
 
-	public readonly maxConcurrency: number;
+	readonly maxConcurrency: number;
 
-	public readonly interval: number;
+	readonly interval: number;
 
-	public readonly maxRetry: number;
+	readonly maxRetry: number;
 
-	public readonly capacity: number;
+	readonly capacity: number;
 
-	public constructor(init: ThrottleConfig, adapter: T) {
+	constructor(init: ThrottleConfig, adapter: T) {
 		const config = fillDefaults(init);
 		this.maxConcurrency = config.maxConcurrency > 0 ? config.maxConcurrency : Infinity;
 		this.interval = Math.max(0, config.interval);
 		this.maxRetry = Math.max(0, config.maxRetry);
 		this.capacity = Math.max(0, config.capacity);
-		this._shouldRetry = config.shouldRetry;
-		this._adapter = adapter;
-		this._queue = this.capacity > 0
+		this.#shouldRetry = config.shouldRetry;
+		this.#adapter = adapter;
+		this.#queue = this.capacity > 0
 			? new Array<QueueItem<T>>(this.capacity)
 			: new Array<QueueItem<T>>();
 		if (config.maxConcurrency > 0 && config.interval > 0)
-			this._timestamps = new Array<number>(config.maxConcurrency);
+			this.#timestamps = new Array<number>(config.maxConcurrency);
 	}
 
-	private get nextTimestamp(): number | undefined {
-		if (!this._timestamps)
+	get #nextTimestamp(): number | undefined {
+		if (!this.#timestamps)
 			return undefined;
-		if (this._index < this.maxConcurrency)
+		if (this.#index < this.maxConcurrency)
 			return 0;
-		const idx = this._index % this.maxConcurrency;
-		return this._timestamps[idx] + this.interval;
+		const idx = this.#index % this.maxConcurrency;
+		return this.#timestamps[idx] + this.interval;
 	}
 
-	private pop(): QueueItem<T> | undefined {
-		if (this._index >= this._end)
+	#pop(): QueueItem<T> | undefined {
+		if (this.#index >= this.#end)
 			return undefined;
-		const item = this._queue[this.capacity ? this._index % this.capacity : this._index];
-		if (this._timestamps)
-			this._timestamps[this._index % this.maxConcurrency] = Date.now();
-		++this._index;
+		const item = this.#queue[this.capacity ? this.#index % this.capacity : this.#index];
+		if (this.#timestamps)
+			this.#timestamps[this.#index % this.maxConcurrency] = Date.now();
+		++this.#index;
 		return item;
 	}
 
-	private push(item: QueueItem<T>) {
+	#push(item: QueueItem<T>) {
 		if (this.capacity)
-			this._queue[this._end % this.capacity] = item;
+			this.#queue[this.#end % this.capacity] = item;
 		else
-			this._queue.push(item);
-		++this._end;
+			this.#queue.push(item);
+		++this.#end;
 	}
 
-	private _handleResult(item: QueueItem<T>, result: any, success: boolean, shouldRetry: boolean | undefined | void): Promisable<void> {
+	#handleResult_(item: QueueItem<T>, result: any, success: boolean, shouldRetry: boolean | undefined | void): Promisable<void> {
 		shouldRetry ??= success ? !(result as Response).ok : true;
 		if (!shouldRetry && success)
 			item.onSuccess?.(result as FetchReturn<T>);
@@ -85,48 +85,48 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 			item.onFailure?.(result);
 		else {
 			++item.retried;
-			this.push(item);
+			this.#push(item);
 		}
 	}
 
-	private handleResult(item: QueueItem<T>, result: any, success: boolean): Promisable<void> {
-		const shouldRetry = this._shouldRetry?.(result);
+	#handleResult(item: QueueItem<T>, result: any, success: boolean): Promisable<void> {
+		const shouldRetry = this.#shouldRetry?.(result);
 		return typeof shouldRetry === "object"
-			? shouldRetry.then(retry => this._handleResult(item, result, success, retry))
-			: this._handleResult(item, result, success, shouldRetry);
+			? shouldRetry.then(retry => this.#handleResult_(item, result, success, retry))
+			: this.#handleResult_(item, result, success, shouldRetry);
 	}
 
-	private process() {
-		if (this._concurrency >= this.maxConcurrency)
+	#process() {
+		if (this.#concurrency >= this.maxConcurrency)
 			return;
-		const nextTime = this.nextTimestamp;
+		const nextTime = this.#nextTimestamp;
 		if (nextTime != undefined) {
 			const now = Date.now();
 			if (now < nextTime) {
-				setTimeout(() => this.process(), nextTime - now);
+				setTimeout(() => this.#process(), nextTime - now);
 				return;
 			}
 		}
-		const item = this.pop();
+		const item = this.#pop();
 		if (item == undefined)
 			return;
-		++this._concurrency;
-		this._adapter(...item.params as unknown as FetchParams)
-			.finally(() => --this._concurrency)
-			.then(resp => this.handleResult(item, resp, true))
-			.catch(error => this.handleResult(item, error, false))
-			.finally(() => this.process());
+		++this.#concurrency;
+		this.#adapter(...item.params as unknown as FetchParams)
+			.finally(() => --this.#concurrency)
+			.then(resp => this.#handleResult(item, resp, true))
+			.catch(error => this.#handleResult(item, error, false))
+			.finally(() => this.#process());
 	}
 
-	public add(request: FetchParams<T>, onSuccess?: (response: FetchReturn<T>) => void, onFailure?: (error: any) => void) {
-		if (this.capacity > 0 && this._end - this._index >= this.capacity)
+	add(request: FetchParams<T>, onSuccess?: (response: FetchReturn<T>) => void, onFailure?: (error: any) => void) {
+		if (this.capacity > 0 && this.#end - this.#index >= this.capacity)
 			throw new Error("Request pool is full");
-		this.push({
+		this.#push({
 			params: request,
 			retried: 0,
 			onSuccess,
 			onFailure
 		});
-		this.process();
+		this.#process();
 	}
 }
