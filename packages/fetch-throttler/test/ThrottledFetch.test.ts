@@ -159,29 +159,46 @@ describe("Fetch Throttler", () => {
 				maxConcurrency: 1
 			});
 			const apiUrl = `${apiDomain}${dataPath}`;
-			const apiPromises = [
+			const resps = await Promise.all([
 				fetch(apiUrl).then(resp => resp.json()),
 				fetch(apiUrl).then(resp => resp.json())
-			];
-			const apiResps = await Promise.all(apiPromises);
-			expect(apiResps[1].start - apiResps[0].start).toBeGreaterThanOrEqual(latency);
+			]);
+			expect(resps[1].start - resps[0].start).toBeGreaterThanOrEqual(latency);
 		});
 
-		test("Path config", async () => {
+		test("Path config without subpath", async () => {
 			const fetch = fixture();
 			fetch.configure({
 				scope: "path",
 				url: [testUrl + apiPath, testUrl + dataPath],
 				maxConcurrency: 2
 			});
-			const pathPromises = [
+			const resps = await Promise.all([
 				fetch(testUrl + apiPath).then(resp => resp.json()),
 				fetch(testUrl + apiPath).then(resp => resp.json()),
+				fetch(testUrl + apiPath + "/subpath").then(resp => resp.json()),
 				fetch(testUrl + dataPath).then(resp => resp.json())
-			];
-			const pathResps = await Promise.all(pathPromises);
-			expect(pathResps[1].start - pathResps[0].start).toBeLessThan(timeMargin);
-			expect(pathResps[2].start - pathResps[0].start).toBeGreaterThanOrEqual(latency);
+			]);
+			expect(resps[1].start - resps[0].start).toBeLessThan(timeMargin);
+			expect(resps[2].start - resps[0].start).toBeLessThan(timeMargin);
+			expect(resps[3].start - resps[0].start).toBeGreaterThanOrEqual(latency);
+		});
+
+		test("Path config with subpath", async () => {
+			const fetch = fixture();
+			fetch.configure({
+				scope: "path",
+				url: [testUrl + apiPath, testUrl + dataPath],
+				maxConcurrency: 2,
+				matchSubpath: true
+			});
+			const resps = await Promise.all([
+				fetch(testUrl + apiPath).then(resp => resp.json()),
+				fetch(testUrl + apiPath + "/subpath").then(resp => resp.json()),
+				fetch(testUrl + dataPath).then(resp => resp.json())
+			]);
+			expect(resps[1].start - resps[0].start).toBeLessThan(timeMargin);
+			expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(latency);
 		});
 
 		test("Regex config", async () => {
@@ -190,14 +207,13 @@ describe("Fetch Throttler", () => {
 				regex: new RegExp(`^${imgDomain}`),
 				maxConcurrency: 2
 			});
-			const imgPromises = [
+			const resps = await Promise.all([
 				fetch(`${imgDomain}/a`).then(resp => resp.json()),
 				fetch(`${imgDomain}:8443/b`).then(resp => resp.json()),
 				fetch(`${imgDomain}.uk/c`).then(resp => resp.json())
-			];
-			const imgResps = await Promise.all(imgPromises);
-			expect(imgResps[1].start - imgResps[0].start).toBeLessThan(timeMargin);
-			expect(imgResps[2].start - imgResps[0].start).toBeGreaterThanOrEqual(latency);
+			]);
+			expect(resps[1].start - resps[0].start).toBeLessThan(timeMargin);
+			expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(latency);
 		});
 
 		test("Custom config", async () => {
@@ -207,12 +223,11 @@ describe("Fetch Throttler", () => {
 				interval: 1000
 			});
 			const cdnUrl = `${cdnDomain}/assets/img.jpg`;
-			const cdnPromises = [
+			const resps = await Promise.all([
 				fetch(cdnUrl).then(resp => resp.json()),
 				fetch(cdnUrl).then(resp => resp.json())
-			];
-			const cdnResps = await Promise.all(cdnPromises);
-			expect(cdnResps[1].start - cdnResps[0].start).toBeGreaterThanOrEqual(1000);
+			]);
+			expect(resps[1].start - resps[0].start).toBeGreaterThanOrEqual(1000);
 		});
 
 		test("Error handling", async () => {
