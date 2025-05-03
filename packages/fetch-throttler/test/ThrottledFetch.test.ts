@@ -8,7 +8,7 @@ interface TestResp {
 	end: number;
 }
 
-describe("Throttled Fetch", () => {
+describe("Fetch Throttler", () => {
 	const testUrl = "https://example.com";
 	const latency = 100;
 	const timeMargin = 20;
@@ -19,7 +19,7 @@ describe("Throttled Fetch", () => {
 		return createThrottledFetch(config, adapter.fetch);
 	}
 
-	test("Max Concurrency", async () => {
+	test("Config: maxConcurrency", async () => {
 		const fetch = fixture({ maxConcurrency: 2 });
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
@@ -30,7 +30,7 @@ describe("Throttled Fetch", () => {
 		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(latency);
 	});
 
-	test("Max Retry", async () => {
+	test("Config: maxRetry", async () => {
 		const maxRetry = 2;
 		const fetch = fixture({ maxRetry }, { status: 500 });
 		const start = performance.now();
@@ -42,7 +42,7 @@ describe("Throttled Fetch", () => {
 		expect(json.id).toBe(2);
 	});
 
-	test("Capacity", async () => {
+	test("Config: capacity", async () => {
 		const fetch = fixture({ maxConcurrency: 1, capacity: 1 });
 		const promise = fetch(testUrl).then(resp => resp.json());
 		fetch(testUrl);
@@ -51,7 +51,7 @@ describe("Throttled Fetch", () => {
 		expect(() => fetch(testUrl)).not.toThrow();
 	});
 
-	test("Interval", async () => {
+	test("Config: interval", async () => {
 		const interval = 500;
 		const fetch = fixture({ maxConcurrency: 2, interval });
 		const promises = new Array<Promise<TestResp>>();
@@ -62,7 +62,7 @@ describe("Throttled Fetch", () => {
 		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(interval);
 	});
 
-	describe("Should Retry", () => {
+	describe("Config: shouldRetry", () => {
 		// Test 1: shouldRetry returns true - should retry regardless of response status
 		test("Returns true", async () => {
 			const retryAllFetch = fixture({
@@ -151,7 +151,7 @@ describe("Throttled Fetch", () => {
 		const apiPath = "/api";
 		const dataPath = "/data";
 
-		test("Domain scope", async () => {
+		test("Domain config", async () => {
 			const fetch = fixture();
 			fetch.configure({
 				scope: "domain",
@@ -167,7 +167,7 @@ describe("Throttled Fetch", () => {
 			expect(apiResps[1].start - apiResps[0].start).toBeGreaterThanOrEqual(latency);
 		});
 
-		test("Path scope", async () => {
+		test("Path config", async () => {
 			const fetch = fixture();
 			fetch.configure({
 				scope: "path",
@@ -200,7 +200,7 @@ describe("Throttled Fetch", () => {
 			expect(imgResps[2].start - imgResps[0].start).toBeGreaterThanOrEqual(latency);
 		});
 
-		test("Custom matcher config", async () => {
+		test("Custom config", async () => {
 			const fetch = fixture();
 			fetch.configure({
 				match: url => url.hostname.includes("cdn"),
@@ -236,7 +236,7 @@ describe("Throttled Fetch", () => {
 		})
 	});
 
-	test("URL Parsing", async () => {
+	test("URL parsing", async () => {
 		const fetch = fixture();
 		// Test with URL object
 		const url = new URL(`${testUrl}/test`);
