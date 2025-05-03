@@ -1,4 +1,4 @@
-export class TestAdaptor {
+export class TestAdapter {
 	private requestId = 0;
 
 	public responseInit: ResponseInit = { status: 200 };

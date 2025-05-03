@@ -1,6 +1,6 @@
 import { createThrottledFetch } from "../src/ThrottledFetch";
 import type { Fetch } from "../src/types";
-import { TestAdaptor } from "./TestAdaptor";
+import { TestAdapter } from "./TestAdapter";
 
 interface TestResp {
 	id: number;
@@ -14,8 +14,8 @@ describe("Throttled Fetch", () => {
 	const timeMargin = 20;
 
 	test("Max Concurrency", async () => {
-		const adaptor = new TestAdaptor(latency);
-		const fetch = createThrottledFetch({ maxConcurrency: 2 }, adaptor.fetch);
+		const adapter = new TestAdapter(latency);
+		const fetch = createThrottledFetch({ maxConcurrency: 2 }, adapter.fetch);
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
 			promises.push(fetch(testUrl).then(resp => resp.json()));
@@ -26,9 +26,9 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Max Retry", async () => {
-		const adaptor = new TestAdaptor(latency, { status: 500 });
+		const adapter = new TestAdapter(latency, { status: 500 });
 		const maxRetry = 2;
-		const fetch = createThrottledFetch({ maxRetry }, adaptor.fetch);
+		const fetch = createThrottledFetch({ maxRetry }, adapter.fetch);
 		const start = performance.now();
 		const resp = await fetch(testUrl).catch(err => err);
 		const end = performance.now();
@@ -39,8 +39,8 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Capacity", async () => {
-		const adaptor = new TestAdaptor(latency);
-		const fetch = createThrottledFetch({ maxConcurrency: 1, capacity: 1 }, adaptor.fetch);
+		const adapter = new TestAdapter(latency);
+		const fetch = createThrottledFetch({ maxConcurrency: 1, capacity: 1 }, adapter.fetch);
 		const promise = fetch(testUrl).then(resp => resp.json());
 		fetch(testUrl);
 		expect(() => fetch(testUrl)).rejects.toThrow();
@@ -49,9 +49,9 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Interval", async () => {
-		const adaptor = new TestAdaptor(latency);
+		const adapter = new TestAdapter(latency);
 		const interval = 500;
-		const fetch = createThrottledFetch({ maxConcurrency: 2, interval }, adaptor.fetch);
+		const fetch = createThrottledFetch({ maxConcurrency: 2, interval }, adapter.fetch);
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
 			promises.push(fetch(testUrl).then(resp => resp.json()));
@@ -63,11 +63,11 @@ describe("Throttled Fetch", () => {
 	describe("Should Retry", () => {
 		// Test 1: shouldRetry returns true - should retry regardless of response status
 		test("Returns true", async () => {
-			const adaptor = new TestAdaptor(latency, { status: 200 });
+			const adapter = new TestAdapter(latency, { status: 200 });
 			const retryAllFetch = createThrottledFetch({
 				maxRetry: 2,
 				shouldRetry: () => true
-			}, adaptor.fetch);
+			}, adapter.fetch);
 			const start = performance.now();
 			const resp = await retryAllFetch(testUrl).catch(r => r as Response);
 			const end = performance.now();
@@ -78,7 +78,7 @@ describe("Throttled Fetch", () => {
 
 		// Test 2: shouldRetry returns false for errors - should not retry
 		test("Returns false for errors", async () => {
-			const adaptor = new TestAdaptor(latency);
+			const adapter = new TestAdapter(latency);
 			let errorCount = 0;
 			const errorFetch = createThrottledFetch({
 				maxRetry: 2,
@@ -93,7 +93,7 @@ describe("Throttled Fetch", () => {
 				if (errorCount === 0) {
 					return Promise.reject(new Error("Test error"));
 				}
-				return adaptor.fetch(testUrl);
+				return adapter.fetch(testUrl);
 			});
 			await expect(errorFetch(testUrl)).rejects.toThrow("Test error");
 			expect(errorCount).toBe(1); // Error handler called once, no retries
@@ -101,14 +101,14 @@ describe("Throttled Fetch", () => {
 
 		// Test 3: shouldRetry returns false for non-ok responses - should succeed without retry
 		test("Returns false for non-ok responses", async () => {
-			const adaptor = new TestAdaptor(latency, { status: 404 });
+			const adapter = new TestAdapter(latency, { status: 404 });
 			const nonOkFetch = createThrottledFetch({
 				maxRetry: 2,
 				shouldRetry(errOrRes) {
 					if (errOrRes instanceof Response)
 						return false;
 				}
-			}, adaptor.fetch);
+			}, adapter.fetch);
 			const resp = await nonOkFetch(testUrl);
 			expect(resp.status).toBe(404);
 			const json = await resp.json();
@@ -117,11 +117,11 @@ describe("Throttled Fetch", () => {
 
 		// Test 4: shouldRetry returns undefined - should use default behavior
 		test("Returns undefined", async () => {
-			const adaptor = new TestAdaptor(latency, { status: 500 });
+			const adapter = new TestAdapter(latency, { status: 500 });
 			const defaultFetch = createThrottledFetch({
 				maxRetry: 1,
 				shouldRetry: () => undefined
-			}, adaptor.fetch);
+			}, adapter.fetch);
 			const start = performance.now();
 			const resp = await defaultFetch(testUrl).catch(r => r as Response);
 			const end = performance.now();
@@ -133,13 +133,13 @@ describe("Throttled Fetch", () => {
 
 		// Test 5: Verify response body can't be consumed if not cloned in shouldRetry
 		test("Response body can't be consumed if not cloned", async () => {
-			const adaptor = new TestAdaptor(latency);
+			const adapter = new TestAdapter(latency);
 			const cloneFetch = createThrottledFetch({
 				shouldRetry(errOrRes) {
 					if (errOrRes instanceof Response)
 						return errOrRes.json().then(() => undefined);
 				}
-			}, adaptor.fetch);
+			}, adapter.fetch);
 			const resp = await cloneFetch(testUrl);
 			expect(() => resp.json()).rejects.toThrow("Body is unusable: Body has already been read");
 		});
@@ -150,8 +150,8 @@ describe("Throttled Fetch", () => {
 	const cdnDomain = "https://cdn.example.com";
 
 	test("Configure", async () => {
-		const adaptor = new TestAdaptor(latency);
-		const fetch = createThrottledFetch(adaptor.fetch);
+		const adapter = new TestAdapter(latency);
+		const fetch = createThrottledFetch(adapter.fetch);
 
 		// API paths
 		const apiPath = "/api";
@@ -217,8 +217,8 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("URL Parsing", async () => {
-		const adaptor = new TestAdaptor(latency);
-		const fetch = createThrottledFetch(adaptor.fetch);
+		const adapter = new TestAdapter(latency);
+		const fetch = createThrottledFetch(adapter.fetch);
 
 		// Test with URL object
 		const url = new URL(`${testUrl}/test`);
@@ -235,8 +235,8 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Error handling", async () => {
-		const adaptor = new TestAdaptor(latency);
-		const fetch = createThrottledFetch(adaptor.fetch);
+		const adapter = new TestAdapter(latency);
+		const fetch = createThrottledFetch(adapter.fetch);
 
 		// Test configuration error handling
 		expect(() => fetch.configure({
