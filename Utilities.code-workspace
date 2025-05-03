@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"name": "root",
+			"path": "."
+		},
+		{
+			"name": "browser",
+			"path": "packages/browser"
+		},
+		{
+			"name": "common",
+			"path": "packages/common"
+		},
+		{
+			"name": "fetch-throttler",
+			"path": "packages/fetch-throttler"
+		},
+		{
+			"name": "node",
+			"path": "packages/node"
+		}
+	],
+	"settings": {
+		"jest.disabledWorkspaceFolders": [
+			"root",
+			"browser",
+			"node"
+		]
+	}
+}
