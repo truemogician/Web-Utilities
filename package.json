@@ -15,8 +15,12 @@
 		"./node/*": "./packages/node/lib/*.js"
 	},
 	"scripts": {
-		"build": "pwsh ./scripts/build.ps1"
+		"build": "turbo build"
 	},
 	"author": "true_mogician",
-	"license": "MIT"
+	"license": "MIT",
+	"devDependencies": {
+		"turbo": "^2.5.2"
+	},
+	"packageManager": "pnpm@10.6.5"
 }
