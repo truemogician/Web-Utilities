@@ -56,12 +56,25 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 		scope ??= this.scope;
 		if (scope === "global")
 			return "";
-		else if (scope === "domain")
+		if (scope === "domain")
 			return url.host;
-		else if (scope === "path")
-			return url.origin + url.pathname;
-		else
-			throw new TypeError(`Invalid scope: ${scope}`);
+		if (scope === "path") {
+			const key = url.origin + url.pathname;
+			return key.endsWith("/") ? key.slice(0, -1) : key;
+		}
+		throw new TypeError(`Invalid scope: ${scope}`);
+	}
+
+	private getSubpathKeys(url: URL): string[] {
+		let pathname = url.pathname.substring(1);
+		if (pathname.endsWith("/"))
+			pathname = pathname.slice(0, -1);
+		const parts = pathname.split("/");
+		const keys = new Array<string>(parts.length);
+		keys[0] = url.origin + "/";
+		for (let i = 0; i < parts.length - 1; ++i)
+			keys[i + 1] = keys[i] + parts[i] + "/";
+		return keys.reverse();
 	}
 
 	private getOrCreate(url: URL): RequestPool<T> {
@@ -75,8 +88,15 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 			if (item[0].test(url.href))
 				return item[1];
 		}
-		let pool = this._urlPools.get(this.getKey(url, "path"))
-			?? this._urlPools.get(this.getKey(url, "domain"));
+		let pool = this._urlPools.get(this.getKey(url, "path"));
+		if (pool === undefined) {
+			for (const key of this.getSubpathKeys(url)) {
+				pool = this._urlPools.get(key);
+				if (pool !== undefined)
+					break;
+			}
+		}
+		pool ??= this._urlPools.get(this.getKey(url, "domain"));
 		if (pool === undefined) {
 			const key = this.getKey(url);
 			pool = this._defaultPools.get(key);
@@ -130,14 +150,31 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 			const { url, scope, ...conf } = config;
 			if (scope !== "domain" && scope !== "path")
 				throw new TypeError(`Invalid scope: ${scope}`);
-			const keys = (Array.isArray(url) ? url : [url]).map(u => {
+			const urls = (Array.isArray(url) ? url : url ? [url] : []).map(u => {
 				if (typeof location !== "undefined" && typeof u == "string" && u.startsWith("/"))
 					u = location.origin + u;
 				const url = u instanceof URL ? u : URL.parse(u);
 				if (url === null)
 					throw new TypeError(`Invalid URL: ${u}`);
-				return this.getKey(url, scope);
+				return url;
 			});
+			let keys: string[];
+			if (scope === "domain") {
+				const domains = Array.isArray(config.domains) ? config.domains : config.domains ? [config.domains] : [];
+				if (!urls.length && !domains.length)
+					throw new TypeError("Domain scope requires either url or domains");
+				// Note: embedded `getKey` logic, needs to be updated if `getKey` changes
+				const set = new Set(domains.concat(urls.map(u => u.host)));
+				keys = Array.from(set);
+			}
+			else {
+				if (!urls.length)
+					throw new TypeError("Path scope requires url");
+				const set = new Set(urls.map(u => this.getKey(u, "path")));
+				keys = Array.from(set);
+				if (config.matchSubpath)
+					keys.push(...keys.map(k => k + "/"));
+			}
 			const pool = new RequestPool(conf, this.adapter);
 			for (const key of keys) {
 				if (this._urlPools.has(key))

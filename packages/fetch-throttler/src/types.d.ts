@@ -81,16 +81,36 @@ export interface DefaultThrottleConfig extends ThrottleConfig {
 	scope?: ThrottleScope;
 }
 
-export interface UrlComponentThrottleConfig extends ThrottleConfig {
+export interface DomainThrottleConfig extends ThrottleConfig {
 	/**
-	 * The scope for this specific rule. Must be either `domain` or `path`.
+	 * The scope for this specific rule. Must be `domain`.
 	 */
-	scope: Exclude<ThrottleScope, "global">;
+	scope: "domain";
+
+	/**
+	 * The URL(s) to match for applying this configuration.
+	 */
+	url?: Arrayable<string | URL>;
+
+	/**
+	 * The domain(s) to match for applying this configuration.
+	 * If `url` is not provided, this field is required.
+	 */
+	domains?: Arrayable<string>;
+}
+
+export interface PathThrottleConfig extends ThrottleConfig {
+	/**
+	 * The scope for this specific rule. Must be `path`.
+	 */
+	scope: "path";
 
 	/**
 	 * The URL(s) to match for applying this configuration.
 	 */
 	url: Arrayable<string | URL>;
+
+	matchSubpath?: boolean;
 }
 
 export interface RegexThrottleConfig extends ThrottleConfig {
@@ -108,4 +128,4 @@ export interface CustomThrottleConfig extends ThrottleConfig {
 	match: (url: URL) => boolean;
 }
 
-export type SpecifiedThrottleConfig = UrlComponentThrottleConfig | RegexThrottleConfig | CustomThrottleConfig;
+export type SpecifiedThrottleConfig = DomainThrottleConfig | PathThrottleConfig | RegexThrottleConfig | CustomThrottleConfig;
