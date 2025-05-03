@@ -133,7 +133,12 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 	const filterRequest = "filterRequest" in config ? config.filterRequest : createRequestFilter(config);
 	const filterResponse = "filterResponse" in config ? config.filterResponse : createResponseFilter(config);
 	const hashRequest = "hashRequest" in config ? config.hashRequest : createRequestHasher(config);
-	const storage = "storage" in config ? config.storage : new BasicMemoryCacheStorage<Response>({ ttl: (config.ttl ?? 300) * 1000 });
+	const storage = "storage" in config
+		? config.storage
+		: new BasicMemoryCacheStorage<Response>({
+			ttl: (config.ttl ?? 300) * 1000,
+			autoTouch: true
+		});
 	const noClone = config.cloneResponse === false;
 	return Object.assign(
 		async (input: FetchParams[0], init?: FetchParams[1]): Promise<Response> => {
@@ -158,12 +163,15 @@ export function createCachedFetch(param1?: Fetch | CacheConfig, param2?: CacheCo
 			}
 			const cache = storage.get(key);
 			if (cache != undefined) {
-				if (cache instanceof Response) {
-					storage.touch(key);
-					return noClone ? cache : cache.clone();
-				}
-				else if (config.cachePromise)
-					return noClone ? await cache : await cache.then(r => r.clone());
+				const resp = cache instanceof Promise ? await cache : cache;
+				if (noClone)
+					return resp;
+				// BUG: Weirdly, the body of some responses are used after retrieved from cache, and this behavior is quite random.
+				// One possible way to reproduce is to use TezFiles file info query API, and wait for a few seconds before fetching the same URL the third time after the first cache hit.
+				if (resp.bodyUsed)
+					storage.delete(key);
+				else
+					return resp.clone();
 			}
 			const promise = original(request)
 				.finally(() => {
