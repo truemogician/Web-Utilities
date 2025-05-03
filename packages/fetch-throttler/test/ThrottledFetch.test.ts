@@ -1,5 +1,5 @@
 import { createThrottledFetch } from "../src/ThrottledFetch";
-import type { Fetch } from "../src/types";
+import type { DefaultThrottleConfig, Fetch } from "../src/types";
 import { TestAdapter } from "./TestAdapter";
 
 interface TestResp {
@@ -13,9 +13,14 @@ describe("Throttled Fetch", () => {
 	const latency = 100;
 	const timeMargin = 20;
 
+	function fixture(config?: DefaultThrottleConfig, response?: ResponseInit, delay?: number) {
+		delay ??= latency;
+		const adapter = new TestAdapter(delay, response);
+		return createThrottledFetch(config, adapter.fetch);
+	}
+
 	test("Max Concurrency", async () => {
-		const adapter = new TestAdapter(latency);
-		const fetch = createThrottledFetch({ maxConcurrency: 2 }, adapter.fetch);
+		const fetch = fixture({ maxConcurrency: 2 });
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
 			promises.push(fetch(testUrl).then(resp => resp.json()));
@@ -26,9 +31,8 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Max Retry", async () => {
-		const adapter = new TestAdapter(latency, { status: 500 });
 		const maxRetry = 2;
-		const fetch = createThrottledFetch({ maxRetry }, adapter.fetch);
+		const fetch = fixture({ maxRetry }, { status: 500 });
 		const start = performance.now();
 		const resp = await fetch(testUrl).catch(err => err);
 		const end = performance.now();
@@ -39,8 +43,7 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Capacity", async () => {
-		const adapter = new TestAdapter(latency);
-		const fetch = createThrottledFetch({ maxConcurrency: 1, capacity: 1 }, adapter.fetch);
+		const fetch = fixture({ maxConcurrency: 1, capacity: 1 });
 		const promise = fetch(testUrl).then(resp => resp.json());
 		fetch(testUrl);
 		expect(() => fetch(testUrl)).rejects.toThrow();
@@ -49,9 +52,8 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("Interval", async () => {
-		const adapter = new TestAdapter(latency);
 		const interval = 500;
-		const fetch = createThrottledFetch({ maxConcurrency: 2, interval }, adapter.fetch);
+		const fetch = fixture({ maxConcurrency: 2, interval });
 		const promises = new Array<Promise<TestResp>>();
 		for (let i = 0; i < 3; ++i)
 			promises.push(fetch(testUrl).then(resp => resp.json()));
@@ -63,11 +65,10 @@ describe("Throttled Fetch", () => {
 	describe("Should Retry", () => {
 		// Test 1: shouldRetry returns true - should retry regardless of response status
 		test("Returns true", async () => {
-			const adapter = new TestAdapter(latency, { status: 200 });
-			const retryAllFetch = createThrottledFetch({
+			const retryAllFetch = fixture({
 				maxRetry: 2,
 				shouldRetry: () => true
-			}, adapter.fetch);
+			});
 			const start = performance.now();
 			const resp = await retryAllFetch(testUrl).catch(r => r as Response);
 			const end = performance.now();
@@ -101,14 +102,13 @@ describe("Throttled Fetch", () => {
 
 		// Test 3: shouldRetry returns false for non-ok responses - should succeed without retry
 		test("Returns false for non-ok responses", async () => {
-			const adapter = new TestAdapter(latency, { status: 404 });
-			const nonOkFetch = createThrottledFetch({
+			const nonOkFetch = fixture({
 				maxRetry: 2,
 				shouldRetry(errOrRes) {
 					if (errOrRes instanceof Response)
 						return false;
 				}
-			}, adapter.fetch);
+			}, { status: 404 });
 			const resp = await nonOkFetch(testUrl);
 			expect(resp.status).toBe(404);
 			const json = await resp.json();
@@ -117,11 +117,10 @@ describe("Throttled Fetch", () => {
 
 		// Test 4: shouldRetry returns undefined - should use default behavior
 		test("Returns undefined", async () => {
-			const adapter = new TestAdapter(latency, { status: 500 });
-			const defaultFetch = createThrottledFetch({
+			const defaultFetch = fixture({
 				maxRetry: 1,
 				shouldRetry: () => undefined
-			}, adapter.fetch);
+			}, { status: 500 });
 			const start = performance.now();
 			const resp = await defaultFetch(testUrl).catch(r => r as Response);
 			const end = performance.now();
@@ -133,13 +132,12 @@ describe("Throttled Fetch", () => {
 
 		// Test 5: Verify response body can't be consumed if not cloned in shouldRetry
 		test("Response body can't be consumed if not cloned", async () => {
-			const adapter = new TestAdapter(latency);
-			const cloneFetch = createThrottledFetch({
+			const cloneFetch = fixture({
 				shouldRetry(errOrRes) {
 					if (errOrRes instanceof Response)
 						return errOrRes.json().then(() => undefined);
 				}
-			}, adapter.fetch);
+			});
 			const resp = await cloneFetch(testUrl);
 			expect(() => resp.json()).rejects.toThrow("Body is unusable: Body has already been read");
 		});
@@ -154,8 +152,7 @@ describe("Throttled Fetch", () => {
 		const dataPath = "/data";
 
 		test("Domain scope", async () => {
-			const adapter = new TestAdapter(latency);
-			const fetch = createThrottledFetch(adapter.fetch);
+			const fetch = fixture();
 			fetch.configure({
 				scope: "domain",
 				url: apiDomain,
@@ -171,8 +168,7 @@ describe("Throttled Fetch", () => {
 		});
 
 		test("Path scope", async () => {
-			const adapter = new TestAdapter(latency);
-			const fetch = createThrottledFetch(adapter.fetch);
+			const fetch = fixture();
 			fetch.configure({
 				scope: "path",
 				url: [testUrl + apiPath, testUrl + dataPath],
@@ -189,8 +185,7 @@ describe("Throttled Fetch", () => {
 		});
 
 		test("Regex config", async () => {
-			const adapter = new TestAdapter(latency);
-			const fetch = createThrottledFetch(adapter.fetch);
+			const fetch = fixture();
 			fetch.configure({
 				regex: new RegExp(`^${imgDomain}`),
 				maxConcurrency: 2
@@ -206,8 +201,7 @@ describe("Throttled Fetch", () => {
 		});
 
 		test("Custom matcher config", async () => {
-			const adapter = new TestAdapter(latency);
-			const fetch = createThrottledFetch(adapter.fetch);
+			const fetch = fixture();
 			fetch.configure({
 				match: url => url.hostname.includes("cdn"),
 				interval: 1000
@@ -222,8 +216,7 @@ describe("Throttled Fetch", () => {
 		});
 
 		test("Error handling", async () => {
-			const adapter = new TestAdapter(latency);
-			const fetch = createThrottledFetch(adapter.fetch);
+			const fetch = fixture();
 			fetch.configure({
 				scope: "domain",
 				url: apiDomain,
@@ -244,44 +237,35 @@ describe("Throttled Fetch", () => {
 	});
 
 	test("URL Parsing", async () => {
-		const adapter = new TestAdapter(latency);
-		const fetch = createThrottledFetch(adapter.fetch);
-
+		const fetch = fixture();
 		// Test with URL object
 		const url = new URL(`${testUrl}/test`);
 		const resp1 = await fetch(url).then(resp => resp.json());
 		expect(resp1.id).toBe(0);
-
 		// Test with Request object
 		const req = new Request(`${testUrl}/request`);
 		const resp2 = await fetch(req).then(resp => resp.json());
 		expect(resp2.id).toBe(1);
-
 		// Test invalid URL handling
 		expect(() => fetch("invalid-url")).toThrow(TypeError);
 	});
 
 	test("Error handling", async () => {
-		const adapter = new TestAdapter(latency);
-		const fetch = createThrottledFetch(adapter.fetch);
-
+		const fetch = fixture();
 		// Test configuration error handling
 		expect(() => fetch.configure({
 			// @ts-expect-error - Testing runtime validation
 			scope: "invalid-scope",
 			url: testUrl
 		})).toThrow(TypeError);
-
 		expect(() => fetch.configure({
 			scope: "domain",
 			url: "not-a-valid-url"
 		})).toThrow(TypeError);
-
 		// Test network error handling
 		const errorFetch = createThrottledFetch({
 			maxRetry: 1
 		}, (() => Promise.reject(new Error("Network failure"))) as unknown as Fetch);
-
 		await expect(errorFetch(testUrl)).rejects.toThrow("Network failure");
 	});
 });
