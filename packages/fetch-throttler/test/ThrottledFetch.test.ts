@@ -60,6 +60,91 @@ describe("Throttled Fetch", () => {
 		expect(resps[2].start - resps[0].start).toBeGreaterThanOrEqual(interval);
 	});
 
+	describe("Should Retry", () => {
+		// Test 1: shouldRetry returns true - should retry regardless of response status
+		test("Returns true", async () => {
+			const adaptor = new TestAdaptor(latency, { status: 200 });
+			const retryAllFetch = createThrottledFetch({
+				maxRetry: 2,
+				shouldRetry: () => true
+			}, adaptor.fetch);
+			const start = performance.now();
+			const resp = await retryAllFetch(testUrl).catch(r => r as Response);
+			const end = performance.now();
+			expect(end - start).toBeGreaterThanOrEqual(latency * 3 - timeMargin); // Initial + 2 retries
+			const json = await resp.json();
+			expect(json.id).toBe(2); // Should be the last retry (original + 2 retries = id 2)
+		});
+
+		// Test 2: shouldRetry returns false for errors - should not retry
+		test("Returns false for errors", async () => {
+			const adaptor = new TestAdaptor(latency);
+			let errorCount = 0;
+			const errorFetch = createThrottledFetch({
+				maxRetry: 2,
+				shouldRetry(errOrRes) {
+					if (errOrRes instanceof Error) {
+						errorCount++;
+						return false; // Don't retry errors
+					}
+				}
+			}, () => {
+				// First call throws error, subsequent calls use the normal adapter
+				if (errorCount === 0) {
+					return Promise.reject(new Error("Test error"));
+				}
+				return adaptor.fetch(testUrl);
+			});
+			await expect(errorFetch(testUrl)).rejects.toThrow("Test error");
+			expect(errorCount).toBe(1); // Error handler called once, no retries
+		})
+
+		// Test 3: shouldRetry returns false for non-ok responses - should succeed without retry
+		test("Returns false for non-ok responses", async () => {
+			const adaptor = new TestAdaptor(latency, { status: 404 });
+			const nonOkFetch = createThrottledFetch({
+				maxRetry: 2,
+				shouldRetry(errOrRes) {
+					if (errOrRes instanceof Response)
+						return false;
+				}
+			}, adaptor.fetch);
+			const resp = await nonOkFetch(testUrl);
+			expect(resp.status).toBe(404);
+			const json = await resp.json();
+			expect(json.id).toBe(0); // No retries, just the initial request
+		});
+
+		// Test 4: shouldRetry returns undefined - should use default behavior
+		test("Returns undefined", async () => {
+			const adaptor = new TestAdaptor(latency, { status: 500 });
+			const defaultFetch = createThrottledFetch({
+				maxRetry: 1,
+				shouldRetry: () => undefined
+			}, adaptor.fetch);
+			const start = performance.now();
+			const resp = await defaultFetch(testUrl).catch(r => r as Response);
+			const end = performance.now();
+			expect(resp.status).toBe(500);
+			expect(end - start).toBeGreaterThanOrEqual(latency * 2 - timeMargin); // Initial + 1 retry
+			const json = await resp.json();
+			expect(json.id).toBe(1);
+		});
+
+		// Test 5: Verify response body can't be consumed if not cloned in shouldRetry
+		test("Response body can't be consumed if not cloned", async () => {
+			const adaptor = new TestAdaptor(latency);
+			const cloneFetch = createThrottledFetch({
+				shouldRetry(errOrRes) {
+					if (errOrRes instanceof Response)
+						return errOrRes.json().then(() => undefined);
+				}
+			}, adaptor.fetch);
+			const resp = await cloneFetch(testUrl);
+			expect(() => resp.json()).rejects.toThrow("Body is unusable: Body has already been read");
+		});
+	});
+
 	const apiDomain = "https://api.example.com";
 	const imgDomain = "https://images.example.com";
 	const cdnDomain = "https://cdn.example.com";
