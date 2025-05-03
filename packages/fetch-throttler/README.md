@@ -49,6 +49,12 @@ All configuration methods accept an object with throttling parameters defined in
 *   `interval` (number): Minimum milliseconds between the start of consecutive requests within the same pool. Defaults to `0` (no interval).
 *   `maxRetry` (number): Maximum number of retries for failed requests (network errors or non-ok responses). Defaults to `1`.
 *   `capacity` (number): Maximum number of requests allowed in the queue for this pool. If the queue is full, new requests targeting this pool will throw an error. Defaults to `0` (unlimited).
+*   `shouldRetry` (function): An optional function `(errOrRes: Error | Response) => Promisable<boolean | void>` that determines if a request should be retried.
+    *   Receives the `Error` object (for network/adapter errors) or the `Response` object.
+    *   Return `true` to force a retry (respecting `maxRetry`).
+    *   Return `false` to prevent a retry. If `errOrRes` is a `Response`, the promise resolves with that response (even if not ok); if it's an `Error`, the promise rejects with that error.
+    *   Return `undefined` or `void` to use the default behavior (retry on network errors and non-ok responses).
+    *   **⚠️ Important:** If you need to inspect the `Response` body within this function, you *must* `clone()` the response first. Otherwise, the body will be consumed and unavailable to the original caller.
 
 ### Configuration Scopes 🎯
 
@@ -121,6 +127,6 @@ throttledFetch("https://example.com/admin/config"); // Uses the custom matcher p
 **ℹ️ Notes:**
 *   **Matching Precedence:** When multiple configurations match a URL, the *first* matching rule found is used. The order of precedence is generally: Custom Matcher > Regex > Path > Domain > Default Pool.
 *   **Regex/Custom Order:** Since it's impossible to determine if two Regex or Custom matchers are logically exclusive, the matching process for these types checks configurations in *reverse order* (last added takes precedence). If you add two overlapping Regex rules, the one added later via `configure` will be matched first.
-*   **Performance:** URL-based configurations (`domain`, `path`) offer the best performance as they use an internal Map for O(1) lookups. Regex and Custom configurations require iterating through the defined rules for each request, which might introduce overhead, especially with many rules. Use URL-based rules when possible for optimal performance.
+*   **Performance:** URL-based configurations (`domain`, `path`) offer the best performance as they use an internal Map for $\mathcal{O}(1)$ lookups. Regex and Custom configurations require iterating through the defined rules for each request, which might introduce overhead, especially with many rules. Use URL-based rules when possible for optimal performance.
 *   **Duplicate URL Scopes:** An error is thrown if you try to configure the exact same URL scope (e.g., the same domain or path string) multiple times via `configure`.
 *   **Custom Adapter Properties:** While you can provide a custom fetch adapter, if your adapter function has additional properties attached to it, these properties will *not* be accessible on the returned `ThrottledFetchInst`. The instance only proxies the function call itself and the methods/properties of the `ThrottledFetch` class.
