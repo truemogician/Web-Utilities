@@ -1,9 +1,0 @@
-{
-	"name": "node-utilities",
-	"version": "1.0.0",
-	"description": "Utilities for node-based applications",
-	"main": "lib/index.js",
-	"scripts": {},
-	"author": "true_mogician",
-	"license": "MIT"
-}
