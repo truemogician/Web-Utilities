@@ -7,9 +7,9 @@ A lightweight utility package providing fine-grained throttling control for `fet
 *   **Concurrency Limiting** 🚦: Control the maximum number of simultaneous requests.
 *   **Request Interval** ⏱️: Enforce a minimum time interval between requests.
 *   **Automatic Retries** 🔄: Automatically retry failed requests (e.g., network errors, 5xx status codes).
-*   **Request Queue Capacity** 📥: Limit the number of pending requests.
 *   **Flexible Configuration** ⚙️: Apply throttling rules globally, per domain, per path, using regular expressions, or custom matching functions.
 *   **Custom Fetch Adapter** 🔌: Use a custom `fetch`-compatible function if needed.
+*   **Request Queue Capacity** 📥: Limit the number of pending requests.
 *   **Dependency-Free** 🍃: No runtime dependencies, keeping your bundle size small.
 *   **Event-Based Performance** ⚡: Uses an efficient event-based approach (no `setInterval`) for managing concurrency and intervals, minimizing overhead.
 
@@ -62,7 +62,7 @@ All configuration methods accept an object with throttling parameters defined in
 
 You can apply throttling rules based on different criteria:
 
-#### 1. Domain-based 🌐
+#### 1. Domain-based 🏠
 
 Apply rules to specific domains using `DomainThrottleConfig`. This is useful for limiting requests to a particular API host.
 
@@ -150,7 +150,7 @@ throttledFetch("https://example.com/admin/config");
 
 *   `match`: A function `(url: URL) => boolean` that returns `true` if the configuration should apply to the given `URL`.
 
-### Custom Retry Logic ♻️
+### Custom Retry Logic 🔄
 
 You can provide a `shouldRetry` function in any configuration (default or specific) to customize when requests are retried.
 
