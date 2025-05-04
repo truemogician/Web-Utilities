@@ -20,6 +20,8 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 
 	private readonly _customPools = new Array<[match: CustomThrottleConfig["match"], pool: RequestPool<T>]>();
 
+	private _hasSubpathConfigs = false;
+
 	/**
 	 * The underlying fetch function used to make requests.
 	 */
@@ -89,7 +91,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 				return item[1];
 		}
 		let pool = this._urlPools.get(this.getKey(url, "path"));
-		if (pool === undefined) {
+		if (this._hasSubpathConfigs && pool === undefined) {
 			for (const key of this.getSubpathKeys(url)) {
 				pool = this._urlPools.get(key);
 				if (pool !== undefined)
@@ -172,8 +174,10 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 					throw new TypeError("Path scope requires url");
 				const set = new Set(urls.map(u => this.getKey(u, "path")));
 				keys = Array.from(set);
-				if (config.matchSubpath)
+				if (config.matchSubpath === true) {
+					this._hasSubpathConfigs = true;
 					keys.push(...keys.map(k => k + "/"));
+				}
 			}
 			const pool = new RequestPool(conf, this.adapter);
 			for (const key of keys) {
@@ -225,7 +229,8 @@ export function createThrottledFetch<T extends ExtendedFetch<any, any, any> = Fe
 			// @ts-ignore
 			return inst.invoke(...args);
 		},
-		get: (_, prop, receiver) => Reflect.get(inst, prop, receiver),
+		get: (_, prop) => Reflect.get(inst, prop),
+		set: (_, prop, value) => Reflect.set(inst, prop, value),
 		has: (_, prop) => Reflect.has(inst, prop),
 		getOwnPropertyDescriptor: (_, prop) => Reflect.getOwnPropertyDescriptor(inst, prop),
 		getPrototypeOf: () => Reflect.getPrototypeOf(inst),
