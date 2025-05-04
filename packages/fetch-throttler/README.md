@@ -1,6 +1,6 @@
 # Fetch Throttler 🚀
 
-A utility package providing fine-grained throttling control for `fetch` requests in both Node.js (v18+) and browser environments.
+A lightweight utility package providing fine-grained throttling control for `fetch` requests in both Node.js (v18+) and browser environments.
 
 ## Features ✨
 
@@ -10,6 +10,8 @@ A utility package providing fine-grained throttling control for `fetch` requests
 *   **Request Queue Capacity** 📥: Limit the number of pending requests.
 *   **Flexible Configuration** ⚙️: Apply throttling rules globally, per domain, per path, using regular expressions, or custom matching functions.
 *   **Custom Fetch Adapter** 🔌: Use a custom `fetch`-compatible function if needed.
+*   **Dependency-Free** 🍃: No runtime dependencies, keeping your bundle size small.
+*   **Event-Based Performance** ⚡: Uses an efficient event-based approach (no `setInterval`) for managing concurrency and intervals, minimizing overhead.
 
 ## Installation 📦
 
@@ -25,7 +27,7 @@ pnpm add fetch-throttler
 
 Import `createThrottledFetch` and use it as a replacement for the standard `fetch`.
 
-```typescript
+```ts
 import { createThrottledFetch } from "fetch-throttler";
 
 // Create a throttled fetch instance limiting concurrency to 5 requests globally
@@ -45,10 +47,10 @@ The `ThrottledFetch` instance provides a `configure` method for setting up more 
 
 All configuration methods accept an object with throttling parameters defined in `ThrottleConfig`:
 
-*   `maxConcurrency` (number): Maximum number of concurrent requests within the pool. Defaults to `0` (unlimited), but becomes `1` if `interval` is set and `maxConcurrency` is not explicitly provided.
-*   `interval` (number): Minimum milliseconds between the start of consecutive requests within the same pool. Defaults to `0` (no interval).
+*   `maxConcurrency` (number): Maximum number of concurrent requests allowed by this configuration. Defaults to `0` (unlimited), but becomes `1` if `interval` is set and `maxConcurrency` is not explicitly provided.
+*   `interval` (number): Minimum milliseconds between the start of consecutive requests governed by the same configuration. Defaults to `0` (no interval).
 *   `maxRetry` (number): Maximum number of retries for failed requests (network errors or non-ok responses). Defaults to `1`.
-*   `capacity` (number): Maximum number of requests allowed in the queue for this pool. If the queue is full, new requests targeting this pool will throw an error. Defaults to `0` (unlimited).
+*   `capacity` (number): Maximum number of requests allowed in the queue for this configuration. If the queue is full, new requests targeting this configuration will throw an error. Defaults to `0` (unlimited).
 *   `shouldRetry` (function): An optional function `(errOrRes: Error | Response) => Promisable<boolean | void>` that determines if a request should be retried.
     *   Receives the `Error` object (for network/adapter errors) or the `Response` object.
     *   Return `true` to force a retry (respecting `maxRetry`).
@@ -60,73 +62,121 @@ All configuration methods accept an object with throttling parameters defined in
 
 You can apply throttling rules based on different criteria:
 
-#### 1. URL-based (Domain or Path) 🔗
+#### 1. Domain-based 🌐
 
-Apply rules to specific domains or URL paths using `UrlComponentThrottleConfig`.
+Apply rules to specific domains using `DomainThrottleConfig`. This is useful for limiting requests to a particular API host.
 
-```typescript
+```ts
 import { createThrottledFetch } from "fetch-throttler";
 
-const throttledFetch = createThrottledFetch(); // Start with default global settings
+const throttledFetch = createThrottledFetch();
 
-// Limit requests to 'api.example.com' domain to 2 concurrent requests
 throttledFetch.configure({
     scope: "domain",
-    url: "https://api.example.com",
-    maxConcurrency: 2,
-    interval: 500 // Add a 500ms interval between requests to this domain
+    domains: "api.example.com",
+    // or use url: "https://api.example.com",
+    maxConcurrency: 2
 });
 
-// Apply different limits to specific paths on 'example.com'
+throttledFetch("https://api.example.com/endpoint"); // Uses the domain-specific config
+throttledFetch("https://another-domain.com/data");   // Uses the default global config
+```
+
+*   `scope`: Must be `"domain"`.
+*   `url`: (Optional) A single URL string, a `URL` object, or an array of them. The `host` is extracted.
+*   `domains`: (Optional) A single domain string or an array of them. Required if `url` is not provided.
+
+#### 2. Path-based 🛣️
+
+Apply rules to specific URL paths using `PathThrottleConfig`. This allows fine-grained control over different parts of an API or website.
+
+```ts
+import { createThrottledFetch } from "fetch-throttler";
+
+const throttledFetch = createThrottledFetch();
+
+// Exact path match
 throttledFetch.configure({
     scope: "path",
     url: ["https://example.com/users", "https://example.com/posts"],
     maxConcurrency: 10
 });
 
-// Requests matching these rules will use the specific pool; others use the default pool.
-throttledFetch("https://api.example.com/endpoint1"); // Uses the domain-specific pool
-throttledFetch("https://example.com/users/123");     // Uses the path-specific pool
-throttledFetch("https://another-domain.com/data");   // Uses the default global pool (or a pool based on default scope)
+// Subpath match
+throttledFetch.configure({
+    scope: "path",
+    url: "https://example.com/api",
+    maxConcurrency: 5,
+    matchSubpath: true
+});
+
+throttledFetch("https://example.com/posts");  // Matches exact path for /posts
+throttledFetch("https://example.com/users/123");  // Uses the global config, because path /users doesn't allow subpath matching
+throttledFetch("https://example.com/api/v1/data");  // Matches subpath for /api
 ```
 
-*   `scope`: Must be `"domain"` or `"path"`.
-*   `url`: A single URL string, a `URL` object, or an array of them. The domain or origin+pathname part is extracted based on the `scope`.
+*   `scope`: Must be `"path"`.
+*   `url`: A single URL string, a `URL` object, or an array of them. The `origin`+`pathname` is extracted.
+*   `matchSubpath`: (Optional, defaults to `false`) If `true`, the rule applies to the specified path and all its subpaths.
 
-#### 2. Regex-based 🧩
+#### 3. Regex-based 🧩
 
 Apply rules to URLs matching a regular expression using `RegexThrottleConfig`.
 
-```typescript
+```ts
 throttledFetch.configure({
     regex: /^https:\/\/images\.example\.com\//,
-    maxConcurrency: 20 // Allow higher concurrency for image assets
+    maxConcurrency: 20
 });
 
-throttledFetch("https://images.example.com/logo.png"); // Uses the regex-based pool
+throttledFetch("https://images.example.com/logo.png");
 ```
 
 *   `regex`: A `RegExp` object to test against the full URL string.
 
-#### 3. Custom Matcher Function 🧑‍💻
+#### 4. Custom Matcher Function 🧑‍💻
 
 Apply rules based on a custom function using `CustomThrottleConfig`.
 
-```typescript
+```ts
 throttledFetch.configure({
     match: (url: URL) => url.pathname.startsWith("/admin"),
     maxConcurrency: 1,
     maxRetry: 0
 });
 
-throttledFetch("https://example.com/admin/config"); // Uses the custom matcher pool
+throttledFetch("https://example.com/admin/config");
 ```
 
 *   `match`: A function `(url: URL) => boolean` that returns `true` if the configuration should apply to the given `URL`.
 
+### Custom Retry Logic ♻️
+
+You can provide a `shouldRetry` function in any configuration (default or specific) to customize when requests are retried.
+
+```ts
+import { createThrottledFetch } from "fetch-throttler";
+
+const throttledFetch = createThrottledFetch({
+    maxRetry: 3, // Allow up to 3 retries
+    shouldRetry(errOrRes) {
+        // Don't retry client errors (4xx)
+        if (errOrRes instanceof Response && errOrRes.status >= 400 && errOrRes.status < 500)
+            return false;
+        // For network errors or server errors (5xx), use default behavior (retry)
+        return undefined;
+    }
+});
+
+// This request might be retried if it fails with a network error or 5xx status
+const result1 = await throttledFetch("/some-data");
+// This request will not be retried if it results in a 404 Not Found
+const result2 = await throttledFetch("/non-existent-resource");
+```
+
 **ℹ️ Notes:**
-*   **Matching Precedence:** When multiple configurations match a URL, the *first* matching rule found is used. The order of precedence is generally: Custom Matcher > Regex > Path > Domain > Default Pool.
+*   **Matching Precedence:** When multiple configurations match a URL, the *first* matching rule found is used. The order of precedence is: Custom Matcher > Regex > Exact Path > Subpath > Domain > Default Configuration.
 *   **Regex/Custom Order:** Since it's impossible to determine if two Regex or Custom matchers are logically exclusive, the matching process for these types checks configurations in *reverse order* (last added takes precedence). If you add two overlapping Regex rules, the one added later via `configure` will be matched first.
-*   **Performance:** URL-based configurations (`domain`, `path`) offer the best performance as they use an internal Map for $\mathcal{O}(1)$ lookups. Regex and Custom configurations require iterating through the defined rules for each request, which might introduce overhead, especially with many rules. Use URL-based rules when possible for optimal performance.
+*   **Performance:** URL-based configurations (`domain`, `path`) offer the best performance as they use an internal `Map` for $\mathcal{O}(1)$ lookups. Regex and Custom configurations require iterating through the defined rules for each request, which might introduce overhead, especially with many rules. Use URL-based rules when possible for optimal performance.
 *   **Duplicate URL Scopes:** An error is thrown if you try to configure the exact same URL scope (e.g., the same domain or path string) multiple times via `configure`.
 *   **Custom Adapter Properties:** While you can provide a custom fetch adapter, if your adapter function has additional properties attached to it, these properties will *not* be accessible on the returned `ThrottledFetchInst`. The instance only proxies the function call itself and the methods/properties of the `ThrottledFetch` class.

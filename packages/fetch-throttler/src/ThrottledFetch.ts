@@ -141,7 +141,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 	}
 
 	/**
-	 * Configures specific throttling rules for different scopes (URL, Regex, Custom).
+	 * Configures specific throttling rules for different scopes (Domain, Path, Regex, Custom).
 	 * New requests matching these rules will use a dedicated RequestPool with the specified configuration.
 	 * @param config The specific throttling configuration to apply.
 	 * @throws {TypeError} If the configuration object is invalid or contains an invalid scope or URL.

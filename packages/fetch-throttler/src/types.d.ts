@@ -110,6 +110,13 @@ export interface PathThrottleConfig extends ThrottleConfig {
 	 */
 	url: Arrayable<string | URL>;
 
+	/**
+	 * If `true`, this configuration will apply to the specified path(s) and any subpaths.
+	 * For example, if `url` is `https://example.com/api` and `matchSubpath` is `true`,
+	 * requests to `https://example.com/api/users` will also match.
+	 * If `false` or omitted, only exact path matches will apply.
+	 * @default false
+	 */
 	matchSubpath?: boolean;
 }
 
