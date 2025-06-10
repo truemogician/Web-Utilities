@@ -1,6 +1,6 @@
 {
 	"name": "browser-utilities",
-	"version": "2.3.0",
+	"version": "2.3.1",
 	"description": "Utilities for browser-based applications",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
@@ -9,7 +9,7 @@
 		"./*": "./lib/*.js"
 	},
 	"scripts": {
-		"build": "tsc --build ./tsconfig.json"
+		"build": "tsc -b ./tsconfig.json"
 	},
 	"author": "true_mogician",
 	"license": "MIT",

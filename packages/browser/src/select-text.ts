@@ -1,7 +1,10 @@
 export interface TextWithOffset {
 	text: Text;
-
 	offset: number;
+}
+
+function normalizeIndex(index: number, length: number): number {
+	return index < 0 ? length + index : Math.min(index, length);
 }
 
 export function selectText(node: Node): void;
@@ -13,8 +16,8 @@ export function selectText(param1: Text | Node | TextWithOffset, param2?: number
 		range.selectNodeContents(param1);
 	else if (param1 instanceof Text && typeof param2 == "number") {
 		const end = typeof param3 == "number" ? param3 : param1.length;
-		range.setStart(param1, param2);
-		range.setEnd(param1, end);
+		range.setStart(param1, normalizeIndex(param2, param1.length));
+		range.setEnd(param1, normalizeIndex(end, param1.length));
 	}
 	else if (param2 && typeof param2 != "number") {
 		const start = param1 instanceof Text ? { text: param1, offset: 0 } : param1 as TextWithOffset;
