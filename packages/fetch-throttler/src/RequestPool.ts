@@ -59,6 +59,18 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 		return this.#timestamps[idx] + this.interval;
 	}
 
+	get completed(): number {
+		return this.#index - this.#concurrency;
+	}
+
+	get active(): number {
+		return this.#concurrency;
+	}
+
+	get waiting(): number {
+		return this.#end - this.#index;
+	}
+
 	#pop(): QueueItem<T> | undefined {
 		if (this.#index >= this.#end)
 			return undefined;

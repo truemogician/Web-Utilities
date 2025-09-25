@@ -42,7 +42,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 			if (adapter !== undefined)
 				throw new TypeError(`Invalid adapter: ${adapter}`);
 			if (typeof globalThis.fetch === "undefined") {
-				let message = "`fetch` not available in current environment."
+				let message = "`fetch` not available in current environment.";
 				if (typeof process === "object" && typeof process.version === "string")
 					message += ` Please upgrade node runtime to version 18+. The current version is ${process.version}.`;
 				throw new Error(message);
@@ -79,7 +79,9 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 		return keys.reverse();
 	}
 
-	private getOrCreate(url: URL): RequestPool<T> {
+	private getPool(url: URL, create: true): RequestPool<T>;
+	private getPool(url: URL, create?: false): RequestPool<T> | undefined;
+	private getPool(url: URL, create: boolean = false) {
 		for (let i = this._customPools.length - 1; i >= 0; i--) {
 			const item = this._customPools[i];
 			if (item[0](url))
@@ -102,7 +104,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 		if (pool === undefined) {
 			const key = this.getKey(url);
 			pool = this._defaultPools.get(key);
-			if (pool === undefined) {
+			if (create === true && pool === undefined) {
 				pool = new RequestPool(this.config, this.adapter);
 				this._defaultPools.set(key, pool);
 			}
@@ -110,14 +112,7 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 		return pool;
 	}
 
-	/**
-	 * Invokes the throttled fetch request.
-	 * This method queues the request and executes it according to the matching throttling rules.
-	 * @param args The parameters for the fetch call (URL or Request object, and optional options).
-	 * @returns A promise that resolves with the fetch response or rejects on error.
-	 * @throws {TypeError} If the input URL is invalid.
-	 */
-	invoke(...args: FetchParams<T>): Promise<FetchReturn<T>> {
+	private parseUrl(args: FetchParams<T>): URL {
 		const input = args[0];
 		let url: URL | string;
 		if (typeof input == "string" || input instanceof URL)
@@ -136,8 +131,34 @@ export class ThrottledFetch<T extends ExtendedFetch<any, any, any> = Fetch> {
 				throw new TypeError(`Invalid URL: ${url}`);
 			}
 		}
-		const pool = this.getOrCreate(url);
+		return url;
+	}
+
+	/**
+	 * Invokes the throttled fetch request.
+	 * This method queues the request and executes it according to the matching throttling rules.
+	 * @param args The parameters for the fetch call (URL or Request object, and optional options).
+	 * @returns A promise that resolves with the fetch response or rejects on error.
+	 * @throws {TypeError} If the input URL is invalid.
+	 */
+	invoke(...args: FetchParams<T>): Promise<FetchReturn<T>> {
+		const pool = this.getPool(this.parseUrl(args), true);
 		return new Promise((resolve, reject) => pool.add(args, resolve, reject));
+	}
+
+	/**
+	 * Gets the current statistics of requests for the specified URL.
+	 * @param args The parameters for the fetch call (URL or Request object, and optional options).
+	 * @returns An object containing the counts of completed, active, and waiting requests.
+	 * @throws {TypeError} If the input URL is invalid.
+	 */
+	stats(...args: FetchParams<T>): Record<"completed" | "active" | "waiting", number> {
+		const pool = this.getPool(this.parseUrl(args));
+		return {
+			completed: pool?.completed ?? 0,
+			active: pool?.active ?? 0,
+			waiting: pool?.waiting ?? 0
+		};
 	}
 
 	/**

@@ -1,6 +1,6 @@
 {
 	"name": "fetch-throttler",
-	"version": "1.2.2",
+	"version": "1.3.0",
 	"description": "Fetch with fine-grained throttling control.",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
