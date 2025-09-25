@@ -98,7 +98,7 @@ describe("Fetch Throttler", () => {
 			});
 			await expect(errorFetch(testUrl)).rejects.toThrow("Test error");
 			expect(errorCount).toBe(1); // Error handler called once, no retries
-		})
+		});
 
 		// Test 3: shouldRetry returns false for non-ok responses - should succeed without retry
 		test("Returns false for non-ok responses", async () => {
@@ -248,7 +248,25 @@ describe("Fetch Throttler", () => {
 				// @ts-expect-error Testing missing required properties
 				unknownProp: true
 			})).toThrow(TypeError);
-		})
+		});
+	});
+
+	test("Query", async () => {
+		const fetch = fixture({ maxConcurrency: 2 });
+		const promises = new Array<Promise<TestResp>>();
+		for (let i = 0; i < 3; ++i)
+			promises.push(fetch(testUrl).then(resp => resp.json()));
+		expect(fetch.stats(testUrl)).toEqual({
+			completed: 0,
+			active: 2,
+			waiting: 1,
+		});
+		await Promise.all(promises);
+		expect(fetch.stats(testUrl)).toEqual({
+			completed: 3,
+			active: 0,
+			waiting: 0
+		});
 	});
 
 	test("URL parsing", async () => {
