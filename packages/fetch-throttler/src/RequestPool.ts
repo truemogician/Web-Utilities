@@ -78,14 +78,28 @@ export class RequestPool<T extends ExtendedFetch<any, any, any> = Fetch> {
 	}
 
 	#handleResult_(item: QueueItem<T>, result: any, success: boolean, shouldRetry: boolean | undefined | void): Promisable<void> {
-		shouldRetry ??= success ? !(result as Response).ok : true;
-		if (!shouldRetry && success)
-			item.onSuccess?.(result as FetchReturn<T>);
-		else if (!shouldRetry && !success || shouldRetry && item.retried >= this.maxRetry)
-			item.onFailure?.(result);
+		if (shouldRetry === undefined) { // Default behavior
+			if (!success)
+				item.onFailure?.(result);
+			else {
+				const res = result as FetchReturn<T>;
+				if (!res.ok && item.retried < this.maxRetry) {
+					++item.retried;
+					this.#push(item);
+				}
+				else
+					item.onSuccess?.(res); // Even if !res.ok, we consider it a success, matching the default fetch behavior
+			}
+		}
 		else {
-			++item.retried;
-			this.#push(item);
+			if (shouldRetry && item.retried < this.maxRetry) {
+				++item.retried;
+				this.#push(item);
+			}
+			else if (shouldRetry || !success)
+				item.onFailure?.(result);
+			else
+				item.onSuccess?.(result);
 		}
 	}
 
